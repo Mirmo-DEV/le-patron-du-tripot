@@ -833,8 +833,10 @@ function formaterNombre(n){
   }
   let val = n / Math.pow(1000, palier);
   let txt = val >= 100 ? val.toFixed(0) : val.toFixed(2);
-  // On retire les zéros décimaux inutiles
-  txt = txt.replace(/\.?0+$/, "");
+  // On retire les zéros décimaux inutiles, mais UNIQUEMENT s'il y a un vrai point
+  // décimal : sans cette garde, "130" (aucune décimale) perdait son dernier zéro
+  // et devenait "13" — bug qui affichait par ex. le Bar VIP à 13 k au lieu de 130 k.
+  if(txt.includes(".")) txt = txt.replace(/0+$/, "").replace(/\.$/, "");
   return txt + " " + SUFFIXES[palier];
 }
 
