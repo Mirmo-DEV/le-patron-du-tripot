@@ -296,6 +296,26 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
 .stat-ligne .v{ font-family:var(--titre); font-weight:700; color:var(--laiton-clair);
   font-variant-numeric:tabular-nums; }
 
+/* ---------- Classement partagé ---------- */
+.classement-moi{ display:none; align-items:center; justify-content:space-between; gap:8px;
+  padding:10px 12px; border:2px solid var(--laiton-clair); border-radius:var(--rayon);
+  background:linear-gradient(180deg,#1b4a37,#123829); margin-bottom:10px; font-weight:700; }
+.classement-moi.actif{ display:flex; }
+.classement-liste{ display:flex; flex-direction:column; gap:6px; max-height:420px; overflow-y:auto; }
+.classement-ligne{ display:flex; align-items:center; gap:10px; padding:8px 10px;
+  border:1px solid rgba(201,165,78,.35); border-radius:8px; background:#0e2c20; }
+.classement-ligne.moi{ border-color:var(--laiton-clair); background:#164033; }
+.classement-rang{ font-family:var(--titre); font-weight:900; font-size:19px; color:var(--laiton);
+  width:2em; text-align:center; flex:0 0 auto; }
+.classement-ligne:nth-child(1) .classement-rang{ color:#ffd76a; }
+.classement-ligne:nth-child(2) .classement-rang{ color:#d8d8e0; }
+.classement-ligne:nth-child(3) .classement-rang{ color:#cf9a5c; }
+.classement-pseudo{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.classement-score{ font-family:var(--titre); font-weight:700; color:var(--laiton-clair);
+  font-variant-numeric:tabular-nums; flex:0 0 auto; }
+.classement-etat{ text-align:center; font-size:14px; color:var(--ivoire-doux); font-style:italic;
+  padding:10px 0; }
+
 /* Boutons outils (export/import/prestige/reset) */
 .outils{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
 .btn-outil{ padding:12px; border:2px solid var(--laiton); border-radius:8px; background:#0e2c20;
@@ -339,6 +359,9 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
 .modale .actions .danger{ background:var(--carmin); color:#fff; border-color:var(--carmin); }
 .modale textarea{ width:100%; height:120px; background:#0e2c20; color:var(--ivoire); border:2px solid var(--laiton);
   border-radius:8px; padding:8px; font-family:monospace; font-size:13px; resize:vertical; }
+.modale input[type="text"]{ width:100%; padding:12px; background:#0e2c20; color:var(--ivoire);
+  border:2px solid var(--laiton); border-radius:8px; font-family:var(--ui); font-size:20px;
+  min-height:48px; letter-spacing:.5px; }
 
 /* ---------- Notifications (succès, événements) ---------- */
 .notifs{ position:fixed; top:76px; right:12px; z-index:55; display:flex; flex-direction:column;
@@ -421,6 +444,7 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
         <button class="onglet" role="tab" aria-selected="false" data-vue="ameliorations">Amélior.<span class="pastille" id="pastille-amel" hidden></span></button>
         <button class="onglet" role="tab" aria-selected="false" data-vue="roulette">Roulette</button>
         <button class="onglet" role="tab" aria-selected="false" data-vue="succes">Succès</button>
+        <button class="onglet" role="tab" aria-selected="false" data-vue="classement">Classement</button>
         <button class="onglet" role="tab" aria-selected="false" data-vue="stats">Stats</button>
       </div>
 
@@ -481,6 +505,20 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
           <b style="color:var(--laiton-clair)">+1 %</b> de production.
         </div>
         <div class="succes-grille" id="grille-succes"></div>
+      </div>
+
+      <!-- Vue Classement -->
+      <div class="vue classement-vue" id="vue-classement" role="tabpanel" hidden>
+        <div style="font-size:15px;color:var(--ivoire-doux);margin-bottom:8px;">
+          Les plus grands patrons du tripot, toutes tables confondues. Classé sur le total de jetons gagnés à vie.
+        </div>
+        <div class="classement-moi" id="classement-moi"></div>
+        <div class="classement-liste" id="classement-liste"></div>
+        <div class="classement-etat" id="classement-etat"></div>
+        <div class="outils">
+          <button class="btn-outil" id="btn-rafraichir-classement">↻ Rafraîchir le classement</button>
+          <button class="btn-outil" id="btn-changer-pseudo">✏️ Changer de pseudo</button>
+        </div>
       </div>
 
       <!-- Vue Stats -->
@@ -716,6 +754,15 @@ const REPLIQUES = [
   "« Reviens quand tu veux, patron. On garde ta place au chaud. »",
 ];
 
+// Classement partagé (pseudo + meilleur score entre tous les joueurs) via une base
+// Firebase Realtime Database publique (aucune dépendance ajoutée : simples requêtes
+// fetch() vers l'API REST, pas de SDK). Laisser vide désactive le classement — le
+// jeu reste jouable normalement, seul l'onglet Classement affiche « indisponible ».
+const FIREBASE_URL = "https://clicker-casino-default-rtdb.firebaseio.com";
+const CLASSEMENT_TOP_N = 50;             // nombre de joueurs affichés
+const CLASSEMENT_INTERVALLE_MAJ = 90000; // fréquence d'envoi du score (ms)
+const PSEUDO_LONGUEUR_MAX = 20;
+
 /* =========================================================================
    2. ÉTAT — objet sauvegardé dans localStorage
    ========================================================================= */
@@ -746,6 +793,8 @@ function etatNeuf(){
     prochainOr: 0,             // timestamp de la prochaine apparition du jeton d'or
     prochainEvent: 0,          // timestamp du prochain événement aléatoire
     sonActif: true,           // sons et musique d'accueil activés par défaut
+    pseudo: null,              // pseudo choisi à la première visite (classement partagé)
+    idJoueur: null,            // identifiant unique et permanent (généré une seule fois)
     creePar: "1.0",
   };
 }
@@ -1242,6 +1291,9 @@ function faireePrestige(gain){
   const totalGlobal = etat.totalGlobal;
   const orAttrapes = etat.jetonsOrAttrapes;
   const rouletteStats = etat.roulette;
+  const sonActif = etat.sonActif;
+  const pseudo = etat.pseudo;
+  const idJoueur = etat.idJoueur;
   // On repart d'un état neuf en conservant ce qui est permanent
   etat = etatNeuf();
   etat.diamants = diamants;
@@ -1249,6 +1301,9 @@ function faireePrestige(gain){
   etat.prestigesTotal = prestiges;
   etat.totalGlobal = totalGlobal;
   etat.jetonsOrAttrapes = orAttrapes;
+  etat.sonActif = sonActif;
+  etat.pseudo = pseudo;
+  etat.idJoueur = idJoueur;
   // On conserve les stats de roulette permanentes (mais on remet la dispo)
   rouletteStats.prochaineDispo = 0;
   etat.roulette = rouletteStats;
@@ -1257,6 +1312,7 @@ function faireePrestige(gain){
   verifierSucces();
   majTout();
   sauvegarder();
+  envoyerScoreClassement();
 }
 
 /* =========================================================================
@@ -1449,7 +1505,125 @@ function reinitialiser(){
 }
 
 /* =========================================================================
-   11. INTERFACE — rendu et écouteurs
+   11. CLASSEMENT PARTAGÉ — pseudo, envoi/lecture des scores (Firebase REST)
+   ========================================================================= */
+
+// Échappe le HTML dangereux d'un texte avant de l'insérer via innerHTML.
+// Indispensable pour les pseudos : ce sont des textes saisis par d'autres joueurs.
+function echapperHTML(txt){
+  const d = document.createElement("div");
+  d.textContent = String(txt);
+  return d.innerHTML;
+}
+
+// Génère un identifiant unique et permanent pour ce joueur (une seule fois).
+function genererIdJoueur(){
+  if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+function classementActif(){ return !!FIREBASE_URL; }
+
+// Valide et nettoie un pseudo saisi (longueur, caractères, non vide).
+function nettoyerPseudo(brut){
+  let p = String(brut || "").trim().replace(/\s+/g, " ");
+  if(p.length > PSEUDO_LONGUEUR_MAX) p = p.slice(0, PSEUDO_LONGUEUR_MAX);
+  return p;
+}
+
+// Ouvre la fenêtre de saisie du pseudo. `premiereFois` adapte le texte d'accueil.
+function ouvrirDemandePseudo(premiereFois){
+  const intro = premiereFois
+    ? `<p>Bienvenue à l'arrière-salle. Avant de vous asseoir à la table, comment doit-on vous appeler ?</p>
+       <p style="font-size:14px;">Ce pseudo apparaîtra dans le <b>classement partagé</b> avec les autres joueurs.</p>`
+    : `<p>Changez le nom sous lequel vous apparaissez dans le classement.</p>`;
+  ouvrirModale(`
+    <h2>🎩 ${premiereFois ? "Quel est votre nom, patron ?" : "Changer de pseudo"}</h2>
+    ${intro}
+    <input type="text" id="champ-pseudo" maxlength="${PSEUDO_LONGUEUR_MAX}"
+      placeholder="Votre pseudo…" value="${echapperHTML(etat.pseudo || "")}" autocomplete="off">
+    <div class="actions">
+      <button class="valider" id="pseudo-valider">Valider</button>
+      ${premiereFois ? "" : '<button id="pseudo-annuler">Annuler</button>'}
+    </div>
+  `);
+  const champ = $("#champ-pseudo");
+  champ.focus();
+  const valider = () => {
+    const p = nettoyerPseudo(champ.value);
+    if(!p){ champ.focus(); return; }
+    etat.pseudo = p;
+    if(!etat.idJoueur) etat.idJoueur = genererIdJoueur();
+    fermerModale();
+    sauvegarder();
+    envoyerScoreClassement();
+    if(ui.vue === "classement") chargerClassement();
+  };
+  $("#pseudo-valider").addEventListener("click", valider);
+  champ.addEventListener("keydown", ev => { if(ev.key === "Enter") valider(); });
+  if(!premiereFois) $("#pseudo-annuler").addEventListener("click", fermerModale);
+}
+
+// Envoie (ou met à jour) le meilleur score de ce joueur dans la base partagée.
+// Le total gagné à vie (etat.totalGlobal) sert de score : il ne redescend jamais,
+// même après un prestige. Échec silencieux si le service est indisponible.
+let dernierEnvoiClassement = 0;
+function envoyerScoreClassement(){
+  if(!classementActif() || !etat.pseudo || !etat.idJoueur) return;
+  dernierEnvoiClassement = maintenant();
+  const donnees = { pseudo: etat.pseudo, meilleurTotal: Math.floor(etat.totalGlobal), maj: dernierEnvoiClassement };
+  fetch(`${FIREBASE_URL}/joueurs/${etat.idJoueur}.json`, {
+    method: "PUT", headers: {"Content-Type":"application/json"}, body: JSON.stringify(donnees),
+  }).catch(() => { /* hors ligne ou service indisponible : on retentera plus tard */ });
+}
+
+// Récupère le classement complet et l'affiche.
+function chargerClassement(){
+  const cont = $("#classement-liste"), etatEl = $("#classement-etat");
+  if(!classementActif()){
+    cont.innerHTML = "";
+    etatEl.textContent = "Classement indisponible pour le moment.";
+    return;
+  }
+  etatEl.textContent = "Chargement du classement…";
+  fetch(`${FIREBASE_URL}/joueurs.json`)
+    .then(r => r.json())
+    .then(obj => {
+      const joueurs = Object.entries(obj || {})
+        .map(([id, v]) => ({ id, pseudo: nettoyerPseudo(v && v.pseudo), score: (v && v.meilleurTotal) || 0 }))
+        .filter(j => j.pseudo)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, CLASSEMENT_TOP_N);
+      rendreClassement(joueurs);
+      etatEl.textContent = joueurs.length ? "" : "Personne au classement pour l'instant — soyez le premier !";
+    })
+    .catch(() => { etatEl.textContent = "Impossible de joindre le classement (hors ligne ?)."; });
+}
+
+function rendreClassement(joueurs){
+  const cont = $("#classement-liste");
+  cont.innerHTML = "";
+  joueurs.forEach((j, i) => {
+    const moi = j.id === etat.idJoueur;
+    const ligne = creer("div", "classement-ligne" + (moi ? " moi" : ""));
+    ligne.innerHTML = `<span class="classement-rang">${i+1}</span>
+      <span class="classement-pseudo">${echapperHTML(j.pseudo)}${moi ? " (vous)" : ""}</span>
+      <span class="classement-score">${formaterNombre(j.score)}</span>`;
+    cont.appendChild(ligne);
+  });
+  // Bandeau "moi" si absent du top affiché mais déjà classé
+  const moiDansListe = joueurs.some(j => j.id === etat.idJoueur);
+  const moiEl = $("#classement-moi");
+  if(!moiDansListe && etat.pseudo){
+    moiEl.classList.add("actif");
+    moiEl.innerHTML = `<span>${echapperHTML(etat.pseudo)} (vous)</span><span>${formaterNombre(Math.floor(etat.totalGlobal))}</span>`;
+  } else {
+    moiEl.classList.remove("actif");
+  }
+}
+
+/* =========================================================================
+   12. INTERFACE — rendu et écouteurs
    ========================================================================= */
 
 // --- Modales ---
@@ -1984,6 +2158,10 @@ function installerEcouteurs(){
   $("#btn-reset").addEventListener("click", reinitialiser);
   $("#btn-prestige").addEventListener("click", ouvrirPrestige);
 
+  // Classement
+  $("#btn-rafraichir-classement").addEventListener("click", chargerClassement);
+  $("#btn-changer-pseudo").addEventListener("click", () => ouvrirDemandePseudo(false));
+
   // Fermer la modale en cliquant sur le fond
   $("#modale-fond").addEventListener("click", ev => {
     if(ev.target === $("#modale-fond")) fermerModale();
@@ -2007,7 +2185,9 @@ function installerEcouteurs(){
 
   // Sauvegarde à la fermeture / mise en arrière-plan
   window.addEventListener("beforeunload", sauvegarder);
-  document.addEventListener("visibilitychange", () => { if(document.hidden) sauvegarder(); });
+  document.addEventListener("visibilitychange", () => {
+    if(document.hidden){ sauvegarder(); envoyerScoreClassement(); }
+  });
 }
 
 // Active / coupe le son (les deux boutons partagent ce comportement).
@@ -2037,14 +2217,15 @@ function rendreBoutonSon(){
 function changerVue(vue){
   ui.vue = vue;
   $$(".onglet").forEach(o => o.setAttribute("aria-selected", o.dataset.vue === vue));
-  ["boutique","ameliorations","roulette","succes","stats"].forEach(v => {
+  ["boutique","ameliorations","roulette","succes","classement","stats"].forEach(v => {
     $("#vue-" + v).hidden = (v !== vue);
   });
+  if(vue === "classement") chargerClassement();
   majTout();
 }
 
 /* =========================================================================
-   12. INIT
+   13. INIT
    ========================================================================= */
 
 function init(){
@@ -2062,10 +2243,19 @@ function init(){
   changerVue("boutique");
   majTout();
 
+  // Demande le pseudo à la toute première visite (classement partagé)
+  if(!etat.pseudo && classementActif()){
+    setTimeout(() => ouvrirDemandePseudo(true), 500);
+  } else if(etat.pseudo){
+    envoyerScoreClassement();
+  }
+
   // Boucle logique (temps réel) toutes les 200 ms — robuste en arrière-plan
   setInterval(tickLogique, 200);
   // Auto-save toutes les 10 s
   setInterval(sauvegarder, 10000);
+  // Envoi périodique du score au classement partagé
+  setInterval(envoyerScoreClassement, CLASSEMENT_INTERVALLE_MAJ);
   // Reconstruction périodique de la boutique/améliorations : révèle en jouant les
   // bâtiments et améliorations qui viennent de se débloquer, et met à jour les
   // quantités du mode « Max » quand la banque grimpe. (Le grisé, lui, est déjà
