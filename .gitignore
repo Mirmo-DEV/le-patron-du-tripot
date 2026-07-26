@@ -1,0 +1,18 @@
+# Fichiers système
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+*~
+
+# Dossiers temporaires / dépendances (aucune ici, mais par sécurité)
+node_modules/
+dist/
+*.log
+
+# Sauvegardes de partie exportées localement pour test
+sauvegarde-*.txt
