@@ -425,7 +425,7 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
 
     <!-- Table de jeu (gauche) -->
     <section class="table" aria-label="Table de jeu">
-      <div class="replique" id="aff-replique">« Assieds-toi, patron. La nuit est jeune. »</div>
+      <div class="replique" id="aff-replique">« Machad a mis toute sa paie dans la machine à sous. Elle lui doit encore des excuses. »</div>
       <div class="zone-jeton" id="zone-jeton">
         <button class="jeton" id="jeton" aria-label="Jeton principal — cliquer pour gagner des jetons">
           <span class="val-clic" id="aff-clic">+1</span>
@@ -737,22 +737,8 @@ const PRESTIGE_SEUIL = 1e10;
 // Événements aléatoires : intervalle moyen (ms) entre deux tentatives.
 const EVENT_MIN = 180000, EVENT_MAX = 420000;
 
-// Répliques des habitués déclenchées aux paliers importants.
+// Répliques des habitués déclenchées aux paliers importants (clins d'œil aux amis).
 const REPLIQUES = [
-  "« Assieds-toi, patron. La nuit est jeune. »",
-  "« La maison ne perd jamais. Elle attend, c'est tout. »",
-  "« Encore une machine ? Bientôt tu ne verras plus le tapis. »",
-  "« Un blackjack de plus et le croupier te tutoie. »",
-  "« Le zéro vert te salue bien, patron. »",
-  "« Cette salle sent le poker et les regrets. J'adore. »",
-  "« Ton bar assèche les portefeuilles mieux qu'un désert. »",
-  "« Tu loges les pigeons, maintenant ? Malin. »",
-  "« Un casino qui flotte… l'inspecteur a le mal de mer. »",
-  "« Tout un quartier ? On t'appelle déjà le Maire. »",
-  "« En orbite ? Même la lune te doit un jeton. »",
-  "« Un casino quantique. Tu gagnes déjà dans tous les univers. »",
-  "« Reviens quand tu veux, patron. On garde ta place au chaud. »",
-  // Clins d'œil aux habitués (piochés au hasard aux mêmes moments que les répliques ci-dessus)
   "« Machad a mis toute sa paie dans la machine à sous. Elle lui doit encore des excuses. »",
   "« Jules dit qu'il a un système imparable à la roulette. Le zéro vert n'est pas au courant. »",
   "« Nicolas compte les cartes au blackjack. Le patron compte les sorties. »",
@@ -1019,11 +1005,9 @@ function verifierSucces(){
 
 // --- Répliques d'habitués aux paliers ---
 function verifierRepliques(bat, nouveauTotal){
-  const idx = BATIMENTS.indexOf(bat);
-  // Première acquisition d'un bâtiment : réplique dédiée
-  if(nouveauTotal >= 1 && (nouveauTotal - 1) < 1 && idx + 1 < REPLIQUES.length){
-    afficherReplique(REPLIQUES[idx + 1]);
-  } else if([25, 50, 100].includes(nouveauTotal)){
+  // Première acquisition d'un bâtiment, ou paliers importants : réplique piochée au hasard
+  // (répliques génériques désormais, plus de correspondance dédiée par bâtiment).
+  if((nouveauTotal >= 1 && (nouveauTotal - 1) < 1) || [25, 50, 100].includes(nouveauTotal)){
     afficherReplique(REPLIQUES[entierHasard(0, REPLIQUES.length - 1)]);
   }
 }
