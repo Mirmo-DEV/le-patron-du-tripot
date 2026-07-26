@@ -86,7 +86,15 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
   text-shadow:1px 1px 0 #000; }
 .marque .sous{ font-size:13px; color:var(--ivoire-doux); letter-spacing:1px; text-transform:uppercase; }
 
-.compteurs{ display:flex; gap:clamp(14px,3vw,34px); align-items:baseline; flex-wrap:wrap; }
+/* Bouton son toujours visible dans le bandeau */
+.btn-son-entete{ order:3; flex:0 0 auto; width:46px; height:46px; border-radius:50%;
+  border:2px solid var(--laiton); background:#0e2c20; color:var(--ivoire);
+  font-size:22px; line-height:1; display:flex; align-items:center; justify-content:center;
+  padding:0; }
+.btn-son-entete:hover{ border-color:var(--laiton-clair); background:#164033; }
+
+.compteurs{ display:flex; gap:clamp(14px,3vw,34px); align-items:baseline; flex-wrap:wrap;
+  margin-left:auto; }
 .compteur{ text-align:right; }
 .compteur .val{ font-family:var(--titre); font-weight:900; font-size:clamp(22px,4.6vw,40px);
   color:var(--ivoire); font-variant-numeric:tabular-nums; text-shadow:1px 1px 0 #000; }
@@ -371,6 +379,7 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
       <span class="nom">Le Patron du Tripot</span>
       <span class="sous">arrière-salle privée · 3 h du matin</span>
     </div>
+    <button class="btn-son-entete" id="btn-son-entete" aria-label="Activer ou couper le son" title="Son">🔊</button>
     <div class="compteurs">
       <div class="compteur">
         <div class="val" id="aff-banque">0</div>
@@ -1708,14 +1717,21 @@ let ctxAudio = null;
 function assurerAudio(){
   try{
     if(!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
-    if(ctxAudio.state === "suspended") ctxAudio.resume();
     return ctxAudio;
   }catch(e){ return null; }
 }
 
+// Exécute cb(ctx) UNIQUEMENT quand le contexte audio est réellement actif.
+// Au premier geste, le navigateur réveille le contexte de façon asynchrone (resume
+// renvoie une promesse) : jouer les notes avant ce réveil = silence. On attend donc.
+function avecAudioPret(cb){
+  const ctx = assurerAudio(); if(!ctx) return;
+  if(ctx.state === "running"){ cb(ctx); return; }
+  ctx.resume().then(() => cb(ctx)).catch(() => {});
+}
+
 // Joue une note simple. debut/duree en secondes (relatifs à maintenant), volume 0..1.
-function jouerNote(freq, debut, duree, type = "sine", volume = 0.08){
-  const ctx = ctxAudio; if(!ctx) return;
+function jouerNote(ctx, freq, debut, duree, type = "sine", volume = 0.08){
   const t0 = ctx.currentTime + debut;
   const o = ctx.createOscillator();
   const g = ctx.createGain();
@@ -1730,42 +1746,48 @@ function jouerNote(freq, debut, duree, type = "sine", volume = 0.08){
 // Petit bip discret à l'achat.
 function tinter(){
   if(!etat.sonActif) return;
-  if(!assurerAudio()) return;
-  jouerNote(440 + Math.random()*80, 0, 0.08, "triangle", 0.03);
+  avecAudioPret(ctx => jouerNote(ctx, 440 + Math.random()*80, 0, 0.08, "triangle", 0.03));
 }
 
 // Bruit d'argent quand on gagne à la roulette : cascade rapide de pièces (pas trop fort).
 function sonGainRoulette(){
   if(!etat.sonActif) return;
-  if(!assurerAudio()) return;
-  // Petit arpège clair qui monte + grelots aigus, façon pluie de pièces
-  const notes = [784, 988, 1175, 1568]; // sol5, si5, ré6, sol6
-  notes.forEach((f, i) => jouerNote(f, i * 0.05, 0.14, "triangle", 0.05));
-  for(let i = 0; i < 8; i++){
-    jouerNote(1400 + Math.random()*1400, 0.1 + Math.random()*0.35, 0.06, "square", 0.02);
-  }
+  avecAudioPret(ctx => {
+    // Petit arpège clair qui monte + grelots aigus, façon pluie de pièces
+    const notes = [784, 988, 1175, 1568]; // sol5, si5, ré6, sol6
+    notes.forEach((f, i) => jouerNote(ctx, f, i * 0.05, 0.14, "triangle", 0.05));
+    for(let i = 0; i < 8; i++){
+      jouerNote(ctx, 1400 + Math.random()*1400, 0.1 + Math.random()*0.35, 0.06, "square", 0.02);
+    }
+  });
+}
+
+// Petit son de confirmation quand on (ré)active le son.
+function sonTest(){
+  avecAudioPret(ctx => jouerNote(ctx, 660, 0, 0.14, "triangle", 0.05));
 }
 
 // Jingle d'accueil : courte phrase « lounge » chaleureuse, jouée une fois par session.
 let accueilJoue = false;
 function musiqueAccueil(){
   if(accueilJoue || !etat.sonActif) return;
-  if(!assurerAudio()) return;
-  accueilJoue = true;
-  // Petite ligne de basse feutrée + mélodie douce (accord de septième, ambiance jazzy)
-  const basse = [{f:110,t:0},{f:146.83,t:0.5},{f:130.81,t:1.0},{f:98,t:1.5}]; // la-ré-do-sol
-  basse.forEach(n => jouerNote(n.f, n.t, 0.55, "sine", 0.06));
-  const melodie = [
-    {f:440,t:0.0},{f:554.37,t:0.25},{f:659.25,t:0.5},   // la-do#-mi
-    {f:587.33,t:0.9},{f:659.25,t:1.15},{f:880,t:1.5},   // ré-mi-la (résolution)
-  ];
-  melodie.forEach(n => jouerNote(n.f, n.t, 0.4, "triangle", 0.05));
+  avecAudioPret(ctx => {
+    if(accueilJoue) return;
+    accueilJoue = true;
+    // Petite ligne de basse feutrée + mélodie douce (accord de septième, ambiance jazzy)
+    const basse = [{f:110,t:0},{f:146.83,t:0.5},{f:130.81,t:1.0},{f:98,t:1.5}]; // la-ré-do-sol
+    basse.forEach(n => jouerNote(ctx, n.f, n.t, 0.55, "sine", 0.06));
+    const melodie = [
+      {f:440,t:0.0},{f:554.37,t:0.25},{f:659.25,t:0.5},   // la-do#-mi
+      {f:587.33,t:0.9},{f:659.25,t:1.15},{f:880,t:1.5},   // ré-mi-la (résolution)
+    ];
+    melodie.forEach(n => jouerNote(ctx, n.f, n.t, 0.4, "triangle", 0.05));
+  });
 }
 
 // Amorce l'audio au tout premier geste de l'utilisateur (contrainte navigateur),
 // puis lance le jingle d'accueil.
 function amorcerAudio(){
-  assurerAudio();
   musiqueAccueil();
 }
 
@@ -1885,13 +1907,9 @@ function installerEcouteurs(){
   // Empêche le double-tap-zoom sur les boutons (renfort du viewport)
   document.addEventListener("dblclick", ev => ev.preventDefault(), {passive:false});
 
-  // Bouton Son on/off
-  $("#btn-son").addEventListener("click", () => {
-    etat.sonActif = !etat.sonActif;
-    if(etat.sonActif){ assurerAudio(); jouerNote(660, 0, 0.12, "triangle", 0.05); } // petit test
-    rendreBoutonSon();
-    sauvegarder();
-  });
+  // Boutons Son on/off (bandeau + onglet Stats), même comportement
+  $("#btn-son").addEventListener("click", basculerSon);
+  $("#btn-son-entete").addEventListener("click", basculerSon);
 
   // Amorce l'audio + jingle d'accueil au tout premier geste (contrainte navigateur)
   const amorce = () => { amorcerAudio(); };
@@ -1903,10 +1921,23 @@ function installerEcouteurs(){
   document.addEventListener("visibilitychange", () => { if(document.hidden) sauvegarder(); });
 }
 
-// Met à jour le libellé du bouton Son.
+// Active / coupe le son (les deux boutons partagent ce comportement).
+function basculerSon(){
+  etat.sonActif = !etat.sonActif;
+  if(etat.sonActif) sonTest();           // petit son de confirmation
+  rendreBoutonSon();
+  sauvegarder();
+}
+
+// Met à jour l'affichage des deux boutons Son (bandeau + Stats).
 function rendreBoutonSon(){
-  const b = $("#btn-son"); if(!b) return;
-  b.textContent = etat.sonActif ? "🔊 Son : activé" : "🔇 Son : coupé";
+  const entete = $("#btn-son-entete");
+  if(entete){
+    entete.textContent = etat.sonActif ? "🔊" : "🔇";
+    entete.setAttribute("aria-label", etat.sonActif ? "Couper le son" : "Activer le son");
+  }
+  const b = $("#btn-son");
+  if(b) b.textContent = etat.sonActif ? "🔊 Son : activé" : "🔇 Son : coupé";
 }
 
 function changerVue(vue){
