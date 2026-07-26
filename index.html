@@ -1284,8 +1284,23 @@ function boucle(ts){
     rendreCompteurs();
     rendreBandeauEffet();
     rendreRecharge();
+    rafraichirAccessibilite(); // met à jour le grisé « abordable » en temps réel
   }
   requestAnimationFrame(boucle);
+}
+
+// Rafraîchit uniquement l'état « abordable / trop cher » des cartes déjà affichées,
+// sans reconstruire le DOM. Corrige le grisé qui restait figé quand la banque montait
+// toute seule (production passive) jusqu'à dépasser le prix affiché.
+function rafraichirAccessibilite(){
+  const cartes = document.querySelectorAll("#liste-batiments .carte[data-cout], #liste-ameliorations .carte[data-cout]");
+  for(const c of cartes){
+    const abordable = etat.banque >= Number(c.dataset.cout);
+    c.classList.toggle("inaccessible", !abordable);
+    const el = c.querySelector(".cout");
+    if(el) el.classList.toggle("trop-cher", !abordable);
+  }
+  rendrePastilleAmel();
 }
 
 /* =========================================================================
@@ -1535,6 +1550,8 @@ function rendreBoutique(){
         <div class="cout ${abordable?"":"trop-cher"}">${formaterNombre(cout)}${q>1?` <span style="font-size:13px">(×${q})</span>`:""}</div>
         <div class="nb">${possede}</div>
       </div>`;
+    // On mémorise le coût sur la carte pour rafraîchir le grisé en temps réel
+    carte.dataset.cout = cout;
     carte.addEventListener("click", () => {
       if(acheterBatiment(bat)) tinter();
     });
@@ -1564,6 +1581,7 @@ function rendreAmeliorations(){
         <div class="prod">${etiquette}</div>
       </div>
       <div class="droite"><div class="cout ${abordable?"":"trop-cher"}">${formaterNombre(a.cout)}</div></div>`;
+    carte.dataset.cout = a.cout;
     carte.addEventListener("click", () => { if(acheterAmelioration(a)) tinter(); });
     cont.appendChild(carte);
   }
@@ -1846,6 +1864,15 @@ function init(){
   setInterval(tickLogique, 200);
   // Auto-save toutes les 10 s
   setInterval(sauvegarder, 10000);
+  // Reconstruction périodique de la boutique/améliorations : révèle en jouant les
+  // bâtiments et améliorations qui viennent de se débloquer, et met à jour les
+  // quantités du mode « Max » quand la banque grimpe. (Le grisé, lui, est déjà
+  // rafraîchi à 30 fps par rafraichirAccessibilite.)
+  setInterval(() => {
+    if(modaleOuverte()) return;
+    if(ui.vue === "boutique") rendreBoutique();
+    rendreAmeliorations();
+  }, 1000);
   // Boucle de rendu (30 fps)
   requestAnimationFrame(boucle);
 }
