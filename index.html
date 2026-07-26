@@ -1767,28 +1767,116 @@ function sonTest(){
   avecAudioPret(ctx => jouerNote(ctx, 660, 0, 0.14, "triangle", 0.05));
 }
 
-// Jingle d'accueil : courte phrase « lounge » chaleureuse, jouée une fois par session.
-let accueilJoue = false;
-function musiqueAccueil(){
-  if(accueilJoue || !etat.sonActif) return;
+/* --- Musique d'ambiance qui tourne EN BOUCLE en fond ---
+   Style lounge/jazz feutré (« arrière-salle à 3 h du matin »), entièrement
+   synthétisée, volume doux. Un ordonnanceur planifie les mesures un peu à l'avance
+   (lookahead) pour une boucle fluide et sans coupure, même onglet en arrière-plan. */
+
+let masterMusique = null;         // nœud de gain dédié à la musique (volume global doux)
+let musiqueEnCours = false;
+let musiqueTimer = null;
+let prochaineMesureT = 0;         // instant (temps ctx) de la prochaine mesure
+let indexMesure = 0;
+
+const MUS_BPM = 72;                              // tempo lent, feutré
+const MUS_SEC_TEMPS = 60 / MUS_BPM;              // durée d'un temps
+const MUS_TEMPS_PAR_MESURE = 4;
+const MUS_SEC_MESURE = MUS_SEC_TEMPS * MUS_TEMPS_PAR_MESURE;
+
+// Progression de 8 mesures en la mineur (accords de septième), voix ~A3–A4.
+// basse = fondamentale grave ; quinte = note jouée au 3e temps (léger walking).
+const MUS_PROGRESSION = [
+  { basse:110.00, quinte:164.81, accord:[220.00, 261.63, 329.63, 392.00] }, // Am7
+  { basse:146.83, quinte:220.00, accord:[261.63, 293.66, 349.23, 440.00] }, // Dm7
+  { basse: 82.41, quinte:123.47, accord:[246.94, 293.66, 329.63, 415.30] }, // E7
+  { basse:110.00, quinte:164.81, accord:[220.00, 261.63, 329.63, 392.00] }, // Am7
+  { basse: 87.31, quinte:130.81, accord:[261.63, 329.63, 349.23, 440.00] }, // Fmaj7
+  { basse:146.83, quinte:220.00, accord:[261.63, 293.66, 349.23, 440.00] }, // Dm7
+  { basse: 82.41, quinte:123.47, accord:[246.94, 293.66, 329.63, 415.30] }, // E7
+  { basse:110.00, quinte:164.81, accord:[220.00, 261.63, 329.63, 392.00] }, // Am7
+];
+
+// Joue une note à un instant absolu `t` (temps du contexte), avec enveloppe douce.
+// Routée dans le gain musique pour rester en fond.
+function noteMusique(ctx, freq, t, duree, type, volPic, attack = 0.04, release = 0.35){
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = type; o.frequency.value = freq;
+  const finPlateau = Math.max(t + attack, t + duree - release);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(volPic, t + attack);
+  g.gain.setValueAtTime(volPic, finPlateau);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + duree);
+  o.connect(g); g.connect(masterMusique || ctx.destination);
+  o.start(t); o.stop(t + duree + 0.05);
+}
+
+// Planifie une mesure complète (basse + nappe d'accord + petit arpège de sparkle).
+function jouerMesure(ctx, m, t){
+  // Basse : fondamentale au 1er temps, quinte au 3e temps (démarche feutrée)
+  noteMusique(ctx, m.basse,  t,                      MUS_SEC_TEMPS * 1.9, "sine",     0.06);
+  noteMusique(ctx, m.quinte, t + MUS_SEC_TEMPS * 2,  MUS_SEC_TEMPS * 1.9, "sine",     0.05);
+  // Nappe d'accord tenue sur toute la mesure, très douce
+  for(const f of m.accord){
+    noteMusique(ctx, f, t + 0.02, MUS_SEC_MESURE - 0.1, "triangle", 0.022, 0.25, 0.6);
+  }
+  // Arpège léger façon vibraphone, un tintement par temps (mouvement discret)
+  for(let i = 0; i < MUS_TEMPS_PAR_MESURE; i++){
+    const f = m.accord[i % m.accord.length] * 2; // une octave au-dessus
+    noteMusique(ctx, f, t + i * MUS_SEC_TEMPS + MUS_SEC_TEMPS * 0.5, 0.5, "triangle", 0.02, 0.01, 0.35);
+  }
+}
+
+// Ordonnanceur : garde toujours ~2,5 s de musique planifiée d'avance.
+function ordonnancerMusique(){
+  if(!musiqueEnCours || !ctxAudio) return;
+  const ctx = ctxAudio;
+  while(prochaineMesureT < ctx.currentTime + 2.5){
+    jouerMesure(ctx, MUS_PROGRESSION[indexMesure % MUS_PROGRESSION.length], prochaineMesureT);
+    prochaineMesureT += MUS_SEC_MESURE;
+    indexMesure++;
+  }
+  musiqueTimer = setTimeout(ordonnancerMusique, 500);
+}
+
+// Démarre la musique de fond (au 1er geste, ou quand on réactive le son).
+function demarrerMusiqueFond(){
+  if(musiqueEnCours || !etat.sonActif) return;
   avecAudioPret(ctx => {
-    if(accueilJoue) return;
-    accueilJoue = true;
-    // Petite ligne de basse feutrée + mélodie douce (accord de septième, ambiance jazzy)
-    const basse = [{f:110,t:0},{f:146.83,t:0.5},{f:130.81,t:1.0},{f:98,t:1.5}]; // la-ré-do-sol
-    basse.forEach(n => jouerNote(ctx, n.f, n.t, 0.55, "sine", 0.06));
-    const melodie = [
-      {f:440,t:0.0},{f:554.37,t:0.25},{f:659.25,t:0.5},   // la-do#-mi
-      {f:587.33,t:0.9},{f:659.25,t:1.15},{f:880,t:1.5},   // ré-mi-la (résolution)
-    ];
-    melodie.forEach(n => jouerNote(ctx, n.f, n.t, 0.4, "triangle", 0.05));
+    if(musiqueEnCours) return;
+    if(!masterMusique){
+      masterMusique = ctx.createGain();
+      masterMusique.gain.value = 0.5;   // volume global de la musique (doux)
+      masterMusique.connect(ctx.destination);
+    }
+    musiqueEnCours = true;
+    prochaineMesureT = ctx.currentTime + 0.15;
+    indexMesure = 0;
+    ordonnancerMusique();
   });
 }
 
+// Coupe la musique de fond en douceur.
+function arreterMusiqueFond(){
+  musiqueEnCours = false;
+  clearTimeout(musiqueTimer);
+  if(masterMusique && ctxAudio){
+    const t = ctxAudio.currentTime;
+    try{
+      masterMusique.gain.cancelScheduledValues(t);
+      masterMusique.gain.setValueAtTime(masterMusique.gain.value, t);
+      masterMusique.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    }catch(e){}
+    // On recrée un gain propre au prochain démarrage
+    const ancien = masterMusique; masterMusique = null;
+    setTimeout(() => { try{ ancien.disconnect(); }catch(e){} }, 600);
+  }
+}
+
 // Amorce l'audio au tout premier geste de l'utilisateur (contrainte navigateur),
-// puis lance le jingle d'accueil.
+// puis lance la musique de fond.
 function amorcerAudio(){
-  musiqueAccueil();
+  demarrerMusiqueFond();
 }
 
 // --- Animation du clic sur le jeton central ---
@@ -1924,7 +2012,12 @@ function installerEcouteurs(){
 // Active / coupe le son (les deux boutons partagent ce comportement).
 function basculerSon(){
   etat.sonActif = !etat.sonActif;
-  if(etat.sonActif) sonTest();           // petit son de confirmation
+  if(etat.sonActif){
+    sonTest();                 // petit son de confirmation
+    demarrerMusiqueFond();     // (re)lance la musique de fond
+  } else {
+    arreterMusiqueFond();      // coupe la musique de fond
+  }
   rendreBoutonSon();
   sauvegarder();
 }
