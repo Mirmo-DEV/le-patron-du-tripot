@@ -1,0 +1,1859 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<!-- viewport : pas de zoom accidentel au double-tap, jouable au doigt -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d2820">
+<meta name="description" content="Le Patron du Tripot — jeu de clic sur le thème du casino. Simulation, monnaie fictive.">
+<title>Le Patron du Tripot</title>
+
+<!-- Polices Google Fonts (optionnelles) avec police de secours système si elles ne chargent pas -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* =========================================================================
+   FEUILLE DE STYLE — « L'arrière-salle privée à 3 h du matin »
+   Feutre vert profond, laiton, ivoire, rouge carmin en accent.
+   Direction assumée en thème sombre unique (ambiance nocturne).
+   ========================================================================= */
+
+:root{
+  /* Palette */
+  --feutre:        #123528;   /* vert feutre profond (fond principal)      */
+  --feutre-fonce:  #0d2820;   /* fond plus sombre (bandeaux, cartes)       */
+  --feutre-clair:  #1a463433; /* survol, séparateurs                        */
+  --laiton:        #c9a54e;   /* laiton (bordures, accents chics)          */
+  --laiton-clair:  #e6c878;   /* laiton clair (reflets)                     */
+  --ivoire:        #f2e8d5;   /* texte principal, jetons                    */
+  --ivoire-doux:   #cdbfa4;   /* texte secondaire                          */
+  --carmin:        #b3271f;   /* rouge carmin (accent, danger, rouge roue) */
+  --carmin-clair:  #d84a3f;
+  --noir-roue:     #1c1c1c;   /* noir de la roulette                        */
+  --vert-gain:     #4c9a5a;   /* gains                                       */
+  --ombre:         rgba(0,0,0,.45);
+
+  /* Typographie */
+  --titre: 'Playfair Display', 'Georgia', 'Times New Roman', serif;
+  --ui:    'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+
+  --rayon: 10px;
+}
+
+*{ box-sizing:border-box; margin:0; padding:0; }
+
+html,body{ height:100%; }
+
+body{
+  font-family:var(--ui);
+  font-size:18px;
+  color:var(--ivoire);
+  background:
+    radial-gradient(120% 90% at 50% -10%, #1a4634 0%, var(--feutre) 45%, var(--feutre-fonce) 100%);
+  background-attachment:fixed;
+  min-height:100vh;
+  overflow-x:hidden;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none; user-select:none;
+  line-height:1.3;
+}
+
+/* Titres façon vieille affiche de saloon */
+h1,h2,h3,.titre{ font-family:var(--titre); font-weight:900; letter-spacing:.5px; }
+
+button{ font-family:var(--ui); cursor:pointer; color:inherit; }
+
+/* Accessibilité : focus toujours visible */
+:focus-visible{ outline:3px solid var(--laiton-clair); outline-offset:2px; border-radius:4px; }
+
+/* ---------- Mise en page générale ---------- */
+.appli{ display:flex; flex-direction:column; min-height:100vh; }
+
+/* Bandeau supérieur : banque + production/s */
+.bandeau{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px clamp(12px,3vw,28px);
+  background:linear-gradient(180deg,#0f2e23,#0b2119);
+  border-bottom:2px solid var(--laiton);
+  box-shadow:0 4px 18px var(--ombre);
+  position:sticky; top:0; z-index:30;
+  flex-wrap:wrap;
+}
+.marque{ display:flex; flex-direction:column; line-height:1; }
+.marque .nom{ font-family:var(--titre); font-size:clamp(20px,3.4vw,30px); color:var(--laiton-clair);
+  text-shadow:1px 1px 0 #000; }
+.marque .sous{ font-size:13px; color:var(--ivoire-doux); letter-spacing:1px; text-transform:uppercase; }
+
+.compteurs{ display:flex; gap:clamp(14px,3vw,34px); align-items:baseline; flex-wrap:wrap; }
+.compteur{ text-align:right; }
+.compteur .val{ font-family:var(--titre); font-weight:900; font-size:clamp(22px,4.6vw,40px);
+  color:var(--ivoire); font-variant-numeric:tabular-nums; text-shadow:1px 1px 0 #000; }
+.compteur .lib{ font-size:13px; text-transform:uppercase; letter-spacing:1.5px; color:var(--laiton); }
+.compteur .val .diamants{ color:#8fd3e0; }
+
+/* Corps : table à gauche, onglets à droite */
+.corps{
+  flex:1; display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,440px);
+  gap:clamp(12px,2vw,22px);
+  padding:clamp(12px,2.4vw,24px);
+  align-items:start;
+  max-width:1400px; width:100%; margin:0 auto;
+}
+
+/* ---------- La table de jeu (gauche) ---------- */
+.table{
+  background:
+    radial-gradient(90% 70% at 50% 35%, #1b4a37 0%, #123829 60%, #0e2c20 100%);
+  border:3px solid var(--laiton);
+  border-radius:20px;
+  box-shadow:inset 0 0 60px rgba(0,0,0,.5), 0 8px 30px var(--ombre);
+  padding:clamp(18px,3vw,34px) 18px;
+  display:flex; flex-direction:column; align-items:center; gap:18px;
+  position:relative; min-height:420px;
+  overflow:hidden;
+}
+.table::before{ /* liseré de table de jeu */
+  content:""; position:absolute; inset:12px; border:2px dashed rgba(201,165,78,.35);
+  border-radius:14px; pointer-events:none;
+}
+
+.replique{
+  font-family:var(--titre); font-style:italic; font-weight:700;
+  color:var(--laiton-clair); text-align:center; min-height:1.4em;
+  font-size:clamp(15px,2.4vw,20px); text-shadow:1px 1px 0 #000; max-width:34ch;
+}
+
+/* Le gros jeton central */
+.zone-jeton{ position:relative; display:flex; align-items:center; justify-content:center;
+  width:min(64vw,300px); height:min(64vw,300px); }
+.jeton{
+  width:100%; height:100%; border-radius:50%; border:none; position:relative;
+  background:
+    radial-gradient(circle at 50% 38%, #d8342b 0%, #b3271f 55%, #7d1a14 100%);
+  box-shadow:
+    0 0 0 10px #0e2c20,
+    0 0 0 14px var(--laiton),
+    0 14px 30px rgba(0,0,0,.55),
+    inset 0 -10px 24px rgba(0,0,0,.45),
+    inset 0 8px 20px rgba(255,255,255,.18);
+  color:var(--ivoire);
+  display:flex; align-items:center; justify-content:center; flex-direction:column;
+  transition:transform .06s ease, box-shadow .06s ease;
+  touch-action:manipulation;
+}
+/* Bordure crantée en laiton (encoches du jeton) */
+.jeton::before{
+  content:""; position:absolute; inset:-14px; border-radius:50%;
+  background:repeating-conic-gradient(var(--laiton) 0deg 9deg, #0e2c20 9deg 18deg);
+  z-index:-1;
+  -webkit-mask:radial-gradient(circle, transparent 0 47%, #000 47% 50%, transparent 50%);
+          mask:radial-gradient(circle, transparent 0 47%, #000 47% 50%, transparent 50%);
+}
+.jeton .val-clic{ font-family:var(--titre); font-weight:900; font-size:clamp(22px,6vw,34px);
+  text-shadow:2px 2px 0 rgba(0,0,0,.5); }
+.jeton .lib-clic{ font-size:13px; letter-spacing:2px; text-transform:uppercase; opacity:.85; }
+.jeton:active{ transform:scale(.94); box-shadow:0 0 0 10px #0e2c20,0 0 0 14px var(--laiton),
+  0 6px 14px rgba(0,0,0,.5), inset 0 -6px 16px rgba(0,0,0,.5); }
+
+/* Petits jetons projetés au clic */
+.projection{ position:absolute; width:22px; height:22px; border-radius:50%;
+  background:radial-gradient(circle at 40% 35%, var(--laiton-clair), var(--laiton) 60%, #8a6d2b 100%);
+  border:2px solid #6b551f; pointer-events:none; z-index:5; }
+
+/* Nombre flottant au clic */
+.flottant{ position:absolute; font-family:var(--titre); font-weight:900;
+  font-size:clamp(18px,3vw,26px); color:var(--ivoire); text-shadow:1px 1px 2px #000;
+  pointer-events:none; z-index:6; will-change:transform,opacity; }
+
+/* ---------- Panneau à onglets (droite) ---------- */
+.panneau{ display:flex; flex-direction:column; gap:12px; min-width:0; }
+.onglets{ display:flex; gap:6px; flex-wrap:wrap; }
+.onglet{
+  flex:1 1 auto; min-width:64px; padding:10px 8px; border:2px solid var(--laiton);
+  background:#0e2c20; color:var(--ivoire-doux); border-radius:var(--rayon);
+  font-size:15px; text-transform:uppercase; letter-spacing:1px; font-weight:600;
+  min-height:46px; position:relative;
+}
+.onglet[aria-selected="true"]{ background:var(--laiton); color:#1a1207; font-weight:700; }
+.onglet .pastille{ position:absolute; top:-6px; right:-6px; background:var(--carmin);
+  color:#fff; font-size:12px; border-radius:20px; padding:1px 7px; border:2px solid #0e2c20; }
+
+.vue{ background:var(--feutre-fonce); border:2px solid rgba(201,165,78,.5);
+  border-radius:var(--rayon); padding:12px; max-height:none; }
+.vue[hidden]{ display:none; }
+
+/* Sélecteur de quantité d'achat */
+.multi{ display:flex; gap:6px; margin-bottom:10px; }
+.multi button{ flex:1; padding:8px; border:2px solid var(--laiton); background:#0e2c20;
+  color:var(--ivoire-doux); border-radius:8px; font-weight:600; min-height:42px; letter-spacing:1px; }
+.multi button[aria-pressed="true"]{ background:var(--laiton); color:#1a1207; }
+
+/* Cartes de bâtiment / amélioration */
+.liste{ display:flex; flex-direction:column; gap:8px; }
+.carte{
+  display:flex; align-items:center; gap:10px; text-align:left; width:100%;
+  padding:10px 12px; border:2px solid rgba(201,165,78,.45); border-radius:var(--rayon);
+  background:linear-gradient(180deg,#12362a,#0e2c20); color:var(--ivoire);
+  min-height:64px; transition:transform .08s, border-color .12s, background .12s;
+}
+.carte:not(.inaccessible):hover{ border-color:var(--laiton-clair); background:#164033; }
+.carte:not(.inaccessible):active{ transform:scale(.985); }
+.carte.inaccessible{ opacity:.5; cursor:not-allowed; }
+.carte.verrou{ filter:grayscale(.6); opacity:.55; }
+.carte .icone{ font-size:30px; width:44px; text-align:center; flex:0 0 auto;
+  filter:drop-shadow(1px 1px 1px #000); }
+.carte .infos{ flex:1; min-width:0; }
+.carte .infos .nom{ font-family:var(--titre); font-weight:700; font-size:18px; line-height:1.1; }
+.carte .infos .desc{ font-size:14px; color:var(--ivoire-doux); font-style:italic;
+  overflow:hidden; text-overflow:ellipsis; }
+.carte .infos .prod{ font-size:14px; color:var(--laiton-clair); }
+.carte .droite{ text-align:right; flex:0 0 auto; }
+.carte .droite .cout{ font-family:var(--titre); font-weight:700; font-size:17px;
+  color:var(--laiton-clair); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.carte .droite .cout.trop-cher{ color:var(--carmin-clair); }
+.carte .droite .nb{ font-size:26px; font-family:var(--titre); font-weight:900; color:var(--ivoire);
+  line-height:1; }
+
+/* Galerie d'améliorations achetées */
+.galerie{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.galerie .medaille{ width:44px; height:44px; border-radius:8px; border:2px solid var(--laiton);
+  background:#0e2c20; display:flex; align-items:center; justify-content:center; font-size:24px;
+  filter:drop-shadow(1px 1px 1px #000); }
+.section-titre{ font-family:var(--titre); font-size:20px; color:var(--laiton-clair);
+  margin:6px 0 4px; border-bottom:1px solid rgba(201,165,78,.35); padding-bottom:4px; }
+
+/* ---------- Roulette ---------- */
+.roulette-vue{ display:flex; flex-direction:column; gap:12px; align-items:center; }
+.roue-cadre{ position:relative; width:min(70vw,260px); height:min(70vw,260px); }
+.roue{
+  width:100%; height:100%; border-radius:50%;
+  border:8px solid var(--laiton);
+  box-shadow:0 0 0 4px #0e2c20, inset 0 0 30px rgba(0,0,0,.6), 0 8px 24px var(--ombre);
+  /* dégradé conique généré en JS pour coller aux 37 cases */
+  transition:transform 4s cubic-bezier(.15,.6,.15,1);
+  position:relative;
+}
+.roue-centre{ position:absolute; inset:0; margin:auto; width:34%; height:34%; border-radius:50%;
+  background:radial-gradient(circle at 50% 40%,#1b4a37,#0e2c20); border:4px solid var(--laiton);
+  display:flex; align-items:center; justify-content:center; font-family:var(--titre);
+  font-weight:900; font-size:clamp(20px,6vw,30px); color:var(--ivoire); z-index:2; }
+.fleche{ position:absolute; top:-4px; left:50%; transform:translateX(-50%); z-index:3;
+  width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;
+  border-top:20px solid var(--ivoire); filter:drop-shadow(0 2px 2px #000); }
+
+.mises{ display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; }
+.mise-btn{ padding:12px 8px; border:2px solid var(--laiton); border-radius:8px; background:#0e2c20;
+  color:var(--ivoire); font-weight:600; font-size:16px; min-height:50px; text-transform:uppercase;
+  letter-spacing:.5px; }
+.mise-btn[aria-pressed="true"]{ background:var(--laiton); color:#1a1207; }
+.mise-btn.rouge{ border-color:var(--carmin); }
+.mise-btn.rouge[aria-pressed="true"]{ background:var(--carmin); color:#fff; }
+.mise-btn.noir[aria-pressed="true"]{ background:var(--noir-roue); color:#fff; border-color:#555; }
+.plein-ligne{ display:flex; gap:6px; align-items:center; width:100%; }
+.plein-ligne input{ flex:1; padding:10px; border-radius:8px; border:2px solid var(--laiton);
+  background:#0e2c20; color:var(--ivoire); font-family:var(--ui); font-size:16px; min-height:46px; }
+
+.montants{ display:flex; gap:6px; width:100%; }
+.montants button{ flex:1; padding:10px 4px; border:2px solid var(--laiton); border-radius:8px;
+  background:#0e2c20; color:var(--ivoire-doux); font-weight:600; min-height:44px; }
+.mise-actuelle{ text-align:center; font-size:16px; color:var(--ivoire-doux); }
+.mise-actuelle b{ color:var(--laiton-clair); font-family:var(--titre); }
+
+.lancer{ width:100%; padding:14px; border:2px solid var(--laiton-clair); border-radius:10px;
+  background:linear-gradient(180deg,var(--carmin),#8a1c15); color:#fff; font-weight:700;
+  font-size:20px; text-transform:uppercase; letter-spacing:1px; min-height:56px;
+  font-family:var(--titre); }
+.lancer:disabled{ opacity:.55; cursor:not-allowed; filter:grayscale(.4); }
+
+.historique{ display:flex; gap:5px; flex-wrap:wrap; justify-content:center; width:100%; }
+.pastille-res{ width:30px; height:30px; border-radius:50%; display:flex; align-items:center;
+  justify-content:center; font-weight:700; font-size:14px; color:#fff; border:2px solid var(--laiton);
+  font-variant-numeric:tabular-nums; }
+.pastille-res.r{ background:var(--carmin); } .pastille-res.n{ background:var(--noir-roue); }
+.pastille-res.v{ background:var(--vert-gain); }
+
+/* ---------- Succès & stats ---------- */
+.succes-grille{ display:grid; grid-template-columns:repeat(auto-fill,minmax(58px,1fr)); gap:8px; }
+.succes{ aspect-ratio:1; border-radius:10px; border:2px solid var(--laiton); background:#0e2c20;
+  display:flex; align-items:center; justify-content:center; font-size:28px; position:relative;
+  filter:drop-shadow(1px 1px 1px #000); }
+.succes.verrou{ filter:grayscale(1) brightness(.5); opacity:.55; }
+.stats-liste{ display:flex; flex-direction:column; gap:6px; }
+.stat-ligne{ display:flex; justify-content:space-between; padding:8px 4px;
+  border-bottom:1px solid rgba(201,165,78,.2); font-size:16px; }
+.stat-ligne .v{ font-family:var(--titre); font-weight:700; color:var(--laiton-clair);
+  font-variant-numeric:tabular-nums; }
+
+/* Boutons outils (export/import/prestige/reset) */
+.outils{ display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+.btn-outil{ padding:12px; border:2px solid var(--laiton); border-radius:8px; background:#0e2c20;
+  color:var(--ivoire); font-weight:600; min-height:48px; font-size:16px; letter-spacing:.5px; }
+.btn-outil.danger{ border-color:var(--carmin); color:var(--carmin-clair); }
+.btn-prestige{ border-color:#8fd3e0; color:#bfeaf2;
+  background:linear-gradient(180deg,#123a3f,#0e2c20); }
+
+/* ---------- Bandeau d'effet en cours ---------- */
+.bandeau-effet{ position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+  z-index:40; display:flex; flex-direction:column; gap:6px; align-items:center; width:min(92vw,520px); }
+.effet{ background:linear-gradient(180deg,#1b4a37,#0e2c20); border:2px solid var(--laiton-clair);
+  border-radius:30px; padding:8px 18px; box-shadow:0 4px 16px var(--ombre); font-weight:700;
+  font-size:16px; color:var(--laiton-clair); display:flex; gap:8px; align-items:center;
+  text-align:center; }
+.effet .barre{ height:4px; background:#0e2c20; border-radius:4px; overflow:hidden; width:80px; }
+.effet .barre i{ display:block; height:100%; background:var(--laiton-clair); }
+
+/* ---------- Jeton d'or ---------- */
+.jeton-or{ position:fixed; z-index:50; width:64px; height:64px; border-radius:50%;
+  background:radial-gradient(circle at 40% 35%,#fff3c4,#e6c878 45%,#b8912f 100%);
+  border:3px solid #8a6d2b; box-shadow:0 0 24px 6px rgba(230,200,120,.7), 0 6px 14px #000;
+  display:flex; align-items:center; justify-content:center; font-size:32px; cursor:pointer;
+  animation:pulse-or 1.1s ease-in-out infinite; }
+@keyframes pulse-or{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.12); } }
+
+/* ---------- Fenêtres modales ---------- */
+.modale-fond{ position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:60;
+  display:flex; align-items:center; justify-content:center; padding:16px; }
+.modale-fond[hidden]{ display:none; }
+.modale{ background:linear-gradient(180deg,#123829,#0d2820); border:3px solid var(--laiton);
+  border-radius:16px; padding:22px; max-width:460px; width:100%; box-shadow:0 12px 40px #000;
+  max-height:90vh; overflow-y:auto; }
+.modale h2{ font-size:26px; color:var(--laiton-clair); margin-bottom:10px; text-align:center; }
+.modale p{ margin-bottom:12px; color:var(--ivoire-doux); font-size:17px; }
+.modale p b{ color:var(--ivoire); }
+.modale .actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+.modale .actions button{ flex:1 1 140px; padding:13px; border-radius:10px; border:2px solid var(--laiton);
+  background:#0e2c20; color:var(--ivoire); font-weight:700; font-size:17px; min-height:52px; }
+.modale .actions .valider{ background:var(--laiton); color:#1a1207; }
+.modale .actions .danger{ background:var(--carmin); color:#fff; border-color:var(--carmin); }
+.modale textarea{ width:100%; height:120px; background:#0e2c20; color:var(--ivoire); border:2px solid var(--laiton);
+  border-radius:8px; padding:8px; font-family:monospace; font-size:13px; resize:vertical; }
+
+/* ---------- Notifications (succès, événements) ---------- */
+.notifs{ position:fixed; top:76px; right:12px; z-index:55; display:flex; flex-direction:column;
+  gap:8px; width:min(88vw,320px); pointer-events:none; }
+.notif{ background:linear-gradient(180deg,#1b4a37,#0e2c20); border:2px solid var(--laiton);
+  border-left:6px solid var(--laiton-clair); border-radius:10px; padding:10px 12px;
+  box-shadow:0 6px 18px var(--ombre); animation:entree-notif .3s ease; }
+.notif.succes-notif{ border-left-color:var(--laiton-clair); }
+.notif .t{ font-family:var(--titre); font-weight:700; color:var(--laiton-clair); font-size:17px; }
+.notif .d{ font-size:15px; color:var(--ivoire-doux); }
+@keyframes entree-notif{ from{ transform:translateX(30px); opacity:0; } to{ transform:none; opacity:1; } }
+
+/* ---------- Pied de page (mention légale obligatoire) ---------- */
+.pied{ text-align:center; padding:12px 16px 22px; font-size:13px; color:var(--ivoire-doux);
+  border-top:1px solid rgba(201,165,78,.25); line-height:1.4; }
+.pied b{ color:var(--laiton); }
+
+/* ---------- Responsive : tout s'empile sur mobile ---------- */
+@media (max-width:860px){
+  .corps{ grid-template-columns:1fr; }
+  .panneau{ order:2; }
+  body{ font-size:17px; }
+}
+
+/* ---------- Respect de prefers-reduced-motion ---------- */
+@media (prefers-reduced-motion:reduce){
+  *{ animation-duration:.001ms !important; animation-iteration-count:1 !important;
+     transition-duration:.001ms !important; scroll-behavior:auto !important; }
+  .roue{ transition:transform .4s linear; }
+}
+</style>
+</head>
+<body>
+<div class="appli">
+
+  <!-- ================= BANDEAU SUPÉRIEUR ================= -->
+  <header class="bandeau">
+    <div class="marque">
+      <span class="nom">Le Patron du Tripot</span>
+      <span class="sous">arrière-salle privée · 3 h du matin</span>
+    </div>
+    <div class="compteurs">
+      <div class="compteur">
+        <div class="val" id="aff-banque">0</div>
+        <div class="lib">jetons en banque</div>
+      </div>
+      <div class="compteur">
+        <div class="val" id="aff-jps">0</div>
+        <div class="lib">jetons / seconde</div>
+      </div>
+      <div class="compteur">
+        <div class="val"><span class="diamants" id="aff-diamants">0</span> ◆</div>
+        <div class="lib">diamants</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= CORPS ================= -->
+  <main class="corps">
+
+    <!-- Table de jeu (gauche) -->
+    <section class="table" aria-label="Table de jeu">
+      <div class="replique" id="aff-replique">« Assieds-toi, patron. La nuit est jeune. »</div>
+      <div class="zone-jeton" id="zone-jeton">
+        <button class="jeton" id="jeton" aria-label="Jeton principal — cliquer pour gagner des jetons">
+          <span class="val-clic" id="aff-clic">+1</span>
+          <span class="lib-clic">tapez ici</span>
+        </button>
+      </div>
+      <div style="font-size:15px;color:var(--ivoire-doux);text-align:center;">
+        Espace ou Entrée pour taper le jeton
+      </div>
+    </section>
+
+    <!-- Panneau à onglets (droite) -->
+    <section class="panneau" aria-label="Gestion du casino">
+      <div class="onglets" role="tablist">
+        <button class="onglet" role="tab" aria-selected="true"  data-vue="boutique">Boutique</button>
+        <button class="onglet" role="tab" aria-selected="false" data-vue="ameliorations">Amélior.<span class="pastille" id="pastille-amel" hidden></span></button>
+        <button class="onglet" role="tab" aria-selected="false" data-vue="roulette">Roulette</button>
+        <button class="onglet" role="tab" aria-selected="false" data-vue="succes">Succès</button>
+        <button class="onglet" role="tab" aria-selected="false" data-vue="stats">Stats</button>
+      </div>
+
+      <!-- Vue Boutique -->
+      <div class="vue" id="vue-boutique" role="tabpanel">
+        <div class="multi" id="selecteur-multi">
+          <button data-multi="1"   aria-pressed="true">Acheter ×1</button>
+          <button data-multi="10"  aria-pressed="false">×10</button>
+          <button data-multi="max" aria-pressed="false">Max</button>
+        </div>
+        <div class="liste" id="liste-batiments"></div>
+      </div>
+
+      <!-- Vue Améliorations -->
+      <div class="vue" id="vue-ameliorations" role="tabpanel" hidden>
+        <div id="liste-ameliorations"></div>
+        <div class="section-titre">Galerie du patron</div>
+        <div class="galerie" id="galerie-amel"></div>
+      </div>
+
+      <!-- Vue Roulette -->
+      <div class="vue roulette-vue" id="vue-roulette" role="tabpanel" hidden>
+        <div class="roue-cadre">
+          <div class="fleche"></div>
+          <div class="roue" id="roue"></div>
+          <div class="roue-centre" id="roue-centre">?</div>
+        </div>
+        <div class="historique" id="roulette-historique"></div>
+        <div class="mise-actuelle">Mise : <b id="aff-mise">0</b> jetons — Gain potentiel : <b id="aff-gain-pot">0</b></div>
+        <div class="montants">
+          <button data-part="0.10">10 %</button>
+          <button data-part="0.25">25 %</button>
+          <button data-part="0.50">50 %</button>
+          <button data-part="1">Tout</button>
+        </div>
+        <div class="mises" id="mises-simples">
+          <button class="mise-btn rouge"  data-pari="rouge"   aria-pressed="false">Rouge ×2</button>
+          <button class="mise-btn noir"   data-pari="noir"    aria-pressed="false">Noir ×2</button>
+          <button class="mise-btn"        data-pari="pair"    aria-pressed="false">Pair ×2</button>
+          <button class="mise-btn"        data-pari="impair"  aria-pressed="false">Impair ×2</button>
+          <button class="mise-btn"        data-pari="d1"      aria-pressed="false">1<sup>re</sup> douzaine ×3</button>
+          <button class="mise-btn"        data-pari="d2"      aria-pressed="false">2<sup>e</sup> douzaine ×3</button>
+          <button class="mise-btn"        data-pari="d3"      aria-pressed="false">3<sup>e</sup> douzaine ×3</button>
+          <button class="mise-btn"        data-pari="plein"   aria-pressed="false">Plein ×36</button>
+        </div>
+        <div class="plein-ligne" id="ligne-plein" hidden>
+          <label for="num-plein" style="font-size:15px;color:var(--ivoire-doux);">N° :</label>
+          <input id="num-plein" type="number" min="0" max="36" value="7" inputmode="numeric">
+        </div>
+        <button class="lancer" id="btn-lancer">Lancer la roue</button>
+        <div style="font-size:14px;color:var(--ivoire-doux);text-align:center;" id="aff-recharge"></div>
+      </div>
+
+      <!-- Vue Succès -->
+      <div class="vue" id="vue-succes" role="tabpanel" hidden>
+        <div style="font-size:15px;color:var(--ivoire-doux);margin-bottom:8px;">
+          <span id="aff-nb-succes">0</span> succès sur <span id="aff-tot-succes">0</span> — chacun donne
+          <b style="color:var(--laiton-clair)">+1 %</b> de production.
+        </div>
+        <div class="succes-grille" id="grille-succes"></div>
+      </div>
+
+      <!-- Vue Stats -->
+      <div class="vue" id="vue-stats" role="tabpanel" hidden>
+        <div class="stats-liste" id="liste-stats"></div>
+        <div class="outils">
+          <button class="btn-outil btn-prestige" id="btn-prestige">◆ Revendre l'empire (prestige)</button>
+          <button class="btn-outil" id="btn-export">Exporter la sauvegarde</button>
+          <button class="btn-outil" id="btn-import">Importer une sauvegarde</button>
+          <button class="btn-outil danger" id="btn-reset">Tout effacer</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Pied de page : mention légale obligatoire -->
+  <footer class="pied">
+    <b>Ceci est une simulation.</b> La monnaie (« jetons ») est entièrement fictive.
+    Aucun achat réel, aucun gain réel, aucun argent véritable n'est impliqué à aucun moment.
+    Jeu de divertissement — aucune incitation au jeu d'argent.
+  </footer>
+</div>
+
+<!-- Bandeau d'effet en cours -->
+<div class="bandeau-effet" id="bandeau-effet" aria-live="polite"></div>
+
+<!-- Notifications -->
+<div class="notifs" id="notifs" aria-live="polite"></div>
+
+<!-- Fenêtre modale générique -->
+<div class="modale-fond" id="modale-fond" hidden>
+  <div class="modale" id="modale-contenu" role="dialog" aria-modal="true"></div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   LE PATRON DU TRIPOT — logique du jeu (JavaScript vanilla, aucun framework)
+   -------------------------------------------------------------------------
+   Sommaire :
+     1. CONFIG        — tableaux de données de jeu (à équilibrer facilement)
+     2. ÉTAT          — l'objet `etat` sauvegardé
+     3. UTILITAIRES   — formatage, RNG, DOM
+     4. LOGIQUE       — coûts, production, achats, améliorations, succès
+     5. ROULETTE      — mises et tirage
+     6. JETON D'OR & EFFETS
+     7. ÉVÉNEMENTS ALÉATOIRES
+     8. PRESTIGE
+     9. BOUCLE        — tick logique (temps réel) + rendu 30 fps
+    10. SAUVEGARDE    — localStorage, export/import, hors ligne
+    11. INTERFACE     — rendu des panneaux et écouteurs
+    12. INIT
+   ========================================================================= */
+
+/* =========================================================================
+   1. CONFIG — toutes les données de jeu sont ici pour équilibrer facilement
+   ========================================================================= */
+
+// Facteur d'inflation du coût des bâtiments : coût = coutBase × 1,15^possédés
+const FACTEUR_COUT = 1.15;
+
+// Valeur de base d'un clic (avant multiplicateurs)
+const CLIC_BASE = 1;
+
+// Les 10 bâtiments, dans l'ordre de progression.
+// coutBase : prix du 1er exemplaire ; prodBase : jetons/seconde par exemplaire.
+// paliers  : 3 améliorations débloquées à 10/25/50 exemplaires, chacune ×2 la prod.
+//            (coutMult = coût du palier exprimé en multiples du coutBase du bâtiment)
+const BATIMENTS = [
+  { id:"machine", icone:"🎰", nom:"Machine à sous",       coutBase:15,          prodBase:0.1,
+    desc:"Elle avale les pièces et rend rarement. Le cœur poisseux du métier.",
+    paliers:[
+      {seuil:10, coutMult:20,   nom:"Rouleaux truqués",     desc:"Trois cerises ? Seulement quand la caisse le décide."},
+      {seuil:25, coutMult:250,  nom:"Jackpot fantôme",      desc:"Une lumière, une sirène, et zéro sou qui tombe."},
+      {seuil:50, coutMult:3000, nom:"Bandit à mémoire",     desc:"La machine retient qui a gagné. Et se venge."},
+    ]},
+  { id:"blackjack", icone:"🃏", nom:"Table de blackjack",   coutBase:100,         prodBase:1,
+    desc:"« La banque gagne toujours à la longue », dit le croupier en souriant.",
+    paliers:[
+      {seuil:10, coutMult:20,   nom:"Sabot à huit jeux",    desc:"Compter les cartes ? Bonne chance, l'ami."},
+      {seuil:25, coutMult:250,  nom:"Croupier de marbre",   desc:"Il ne cligne pas des yeux. Jamais. Ça inquiète."},
+      {seuil:50, coutMult:3000, nom:"Assurance obligatoire",desc:"On vous vend une assurance contre nous. À nous."},
+    ]},
+  { id:"roulette_bat", icone:"🔴", nom:"Roulette",           coutBase:1100,        prodBase:8,
+    desc:"Le zéro vert, ce petit génie, travaille pour vous vingt-quatre heures sur vingt-quatre.",
+    paliers:[
+      {seuil:10, coutMult:20,   nom:"Bille en plomb",       desc:"Elle tombe où il faut. Pure physique, promis."},
+      {seuil:25, coutMult:250,  nom:"Double zéro discret",  desc:"On l'a peinte de la même couleur. Personne n'a rien vu."},
+      {seuil:50, coutMult:3000, nom:"Tapis magnétique",     desc:"Un aimant sous le feutre. Un détail d'ingénieur."},
+    ]},
+  { id:"poker", icone:"♠️", nom:"Salle de poker",           coutBase:12000,       prodBase:47,
+    desc:"On ne joue pas contre la maison, on paie la maison pour s'entre-dévorer. Le rake, mon ami.",
+    paliers:[
+      {seuil:10, coutMult:20,   nom:"Rake gourmand",        desc:"Cinq pour cent du pot. À chaque main. Toute la nuit."},
+      {seuil:25, coutMult:250,  nom:"Poisson VIP",          desc:"Un riche qui se croit bon. Notre client préféré."},
+      {seuil:50, coutMult:3000, nom:"Tournoi permanent",    desc:"Les inscriptions tournent en boucle. La caisse aussi."},
+    ]},
+  { id:"barvip", icone:"🍸", nom:"Bar VIP",                 coutBase:130000,      prodBase:260,
+    desc:"Verres tièdes à prix brûlant. Plus ils boivent, plus ils misent mal.",
+    paliers:[
+      {seuil:10, coutMult:20,   nom:"Glaçons rationnés",    desc:"Moins de glace, plus d'alcool, plus de mauvaises décisions."},
+      {seuil:25, coutMult:250,  nom:"Cocktail maison",      desc:"Ingrédient secret : de l'audace en bouteille."},
+      {seuil:50, coutMult:3000, nom:"Loge sans horloge",    desc:"Ni fenêtre, ni pendule. Le temps n'existe plus."},
+    ]},
+  { id:"hotel", icone:"🏨", nom:"Hôtel-casino",             coutBase:1.4e6,       prodBase:1400,
+    desc:"On les loge pour qu'ils ne partent jamais. La chambre est offerte, le reste non.",
+    paliers:[
+      {seuil:10, coutMult:20,   nom:"Buffet à volonté",     desc:"Rassasiés, ils restent. Rassasiés, ils jouent."},
+      {seuil:25, coutMult:250,  nom:"Suite du perdant",     desc:"La plus belle chambre, offerte au plus mauvais joueur."},
+      {seuil:50, coutMult:3000, nom:"Labyrinthe de moquette",desc:"Pour trouver la sortie, il faut d'abord traverser la salle."},
+    ]},
+  { id:"flottant", icone:"🛳️", nom:"Casino flottant",       coutBase:2e7,         prodBase:7800,
+    desc:"En eaux internationales, les règles sont les vôtres. Le mal de mer aide à la générosité.",
+    paliers:[
+      {seuil:10, coutMult:20,   nom:"Ancre discrète",       desc:"On lève l'ancre dès que l'inspecteur monte à bord."},
+      {seuil:25, coutMult:250,  nom:"Pavillon de complaisance",desc:"Un drapeau qu'aucune loi ne reconnaît. Parfait."},
+      {seuil:50, coutMult:3000, nom:"Croisière sans retour",desc:"Le port de départ, personne ne le retrouve jamais."},
+    ]},
+  { id:"vegas", icone:"🌆", nom:"Quartier de Vegas",        coutBase:3.3e8,       prodBase:44000,
+    desc:"Un pâté de maisons rien qu'à vous. Néons éteints à l'extérieur : le vrai luxe est à l'intérieur.",
+    paliers:[
+      {seuil:10, coutMult:20,   nom:"Maires reconnaissants", desc:"Quelques enveloppes, et les permis pleuvent."},
+      {seuil:25, coutMult:250,  nom:"Rue sans issue",        desc:"Toutes les avenues mènent à votre caisse."},
+      {seuil:50, coutMult:3000, nom:"Skyline privée",        desc:"Votre nom, en lettres hautes comme un immeuble."},
+    ]},
+  { id:"orbital", icone:"🛰️", nom:"Casino orbital",         coutBase:5.1e9,       prodBase:260000,
+    desc:"Hors de portée des lois terrestres. La roulette en apesanteur, ça change tout — sauf l'espérance.",
+    paliers:[
+      {seuil:10, coutMult:20,   nom:"Zéro gravité, pas zéro maison",desc:"Les jetons flottent, l'avantage reste au sol… chez vous."},
+      {seuil:25, coutMult:250,  nom:"Hublot panoramique",    desc:"La Terre en fond. Les clients pleurent et misent."},
+      {seuil:50, coutMult:3000, nom:"Station autonome",      desc:"Ni pays, ni juge, ni fermeture. Le rêve du patron."},
+    ]},
+  { id:"quantique", icone:"⚛️", nom:"Casino quantique",     coutBase:7.5e10,      prodBase:1.6e6,
+    desc:"Ici, vous gagnez et perdez en même temps — jusqu'à ce que le client ouvre son portefeuille.",
+    paliers:[
+      {seuil:10, coutMult:20,   nom:"Superposition de gains", desc:"Le client a gagné ET perdu. La caisse, elle, a tranché."},
+      {seuil:25, coutMult:250,  nom:"Croupier intriqué",      desc:"Il connaît votre carte avant vous. Détail troublant."},
+      {seuil:50, coutMult:3000, nom:"Boucle temporelle",      desc:"La même nuit se rejoue. La même caisse se remplit."},
+    ]},
+];
+
+// Améliorations de CLIC : chacune multiplie la valeur du clic par 2 (empilables).
+const AMEL_CLIC = [
+  {id:"clic1", cout:100,     nom:"Doigts vifs",         desc:"Le geste du parieur pressé. La table adore."},
+  {id:"clic2", cout:1500,    nom:"Poignet d'acier",     desc:"On tape le tapis comme on frappe un rappel."},
+  {id:"clic3", cout:25000,   nom:"Bagues chargées",     desc:"Trois bagues au laiton. Ça pèse dans le geste."},
+  {id:"clic4", cout:5e5,     nom:"Gant du croupier",    desc:"La main qui distribue et la main qui ramasse."},
+  {id:"clic5", cout:1e7,     nom:"Réflexe de tricheur", desc:"Plus vite que l'œil de la sécurité."},
+  {id:"clic6", cout:2.5e8,   nom:"Main invisible",      desc:"Personne ne la voit passer. Surtout pas la caisse."},
+  {id:"clic7", cout:6e9,     nom:"Doigté légendaire",   desc:"On raconte votre geste dans les back-rooms."},
+  {id:"clic8", cout:1.5e11,  nom:"Toucher d'or",        desc:"Chaque contact transforme le feutre en lingot."},
+];
+
+// Améliorations GLOBALES : chacune ajoute +5 % de production totale (empilables).
+const AMEL_GLOBAL = [
+  {id:"glob1", cout:5000,    nom:"Cartes de fidélité",   desc:"Ils reviennent pour des points. Ils repartent sans rien."},
+  {id:"glob2", cout:2e5,     nom:"Musique d'ambiance",   desc:"Un tempo pensé pour desserrer les portefeuilles."},
+  {id:"glob3", cout:8e6,     nom:"Éclairage sans fenêtre",desc:"Ni jour ni nuit. Juste le tapis, toujours le tapis."},
+  {id:"glob4", cout:3e8,     nom:"Oxygène parfumé",      desc:"On dit qu'il tient éveillé. On ne confirme rien."},
+  {id:"glob5", cout:1.2e10,  nom:"Programme haut de gamme",desc:"Limousine, champagne, ardoise. Surtout l'ardoise."},
+  {id:"glob6", cout:5e11,    nom:"Réputation sulfureuse",desc:"On chuchote votre nom. La foule adore le sulfureux."},
+];
+
+// SUCCÈS — chacun donne +1 % de production totale.
+// condition : fonction (e = état) => booléen.
+const SUCCES = [
+  {id:"s_clic1",  icone:"👆", nom:"Premier contact",     desc:"Taper le jeton pour la première fois.",            cond:e=>e.clicsTotal>=1},
+  {id:"s_clic2",  icone:"✌️", nom:"Ça gratte",           desc:"100 clics au compteur.",                           cond:e=>e.clicsTotal>=100},
+  {id:"s_clic3",  icone:"🖐️", nom:"Tendinite naissante", desc:"1 000 clics. Reposez ce poignet.",                 cond:e=>e.clicsTotal>=1000},
+  {id:"s_clic4",  icone:"💪", nom:"Main de fer",          desc:"10 000 clics. Impressionnant, ou inquiétant.",     cond:e=>e.clicsTotal>=10000},
+  {id:"s_tot1",   icone:"🪙", nom:"Premiers sous",        desc:"Amasser 1 000 jetons au total.",                   cond:e=>e.totalGagne>=1000},
+  {id:"s_tot2",   icone:"💰", nom:"La caisse chauffe",    desc:"1 million de jetons gagnés au total.",             cond:e=>e.totalGagne>=1e6},
+  {id:"s_tot3",   icone:"🏦", nom:"Coffre-fort plein",    desc:"1 milliard de jetons au total.",                   cond:e=>e.totalGagne>=1e9},
+  {id:"s_tot4",   icone:"💎", nom:"Fortune indécente",    desc:"1 000 milliards de jetons au total.",              cond:e=>e.totalGagne>=1e12},
+  {id:"s_bat1",   icone:"🏗️", nom:"Premier meuble",       desc:"Acheter votre premier bâtiment.",                  cond:e=>totalBatiments(e)>=1},
+  {id:"s_bat2",   icone:"🏘️", nom:"Petit empire",         desc:"Posséder 50 bâtiments en tout.",                   cond:e=>totalBatiments(e)>=50},
+  {id:"s_bat3",   icone:"🌃", nom:"Grand empire",         desc:"Posséder 200 bâtiments en tout.",                  cond:e=>totalBatiments(e)>=200},
+  {id:"s_bat4",   icone:"👑", nom:"Monopole",             desc:"Posséder 400 bâtiments en tout.",                  cond:e=>totalBatiments(e)>=400},
+  {id:"s_mac",    icone:"🎰", nom:"Le tripot originel",   desc:"Posséder 50 machines à sous.",                     cond:e=>(e.batiments.machine||0)>=50},
+  {id:"s_qua",    icone:"⚛️", nom:"Chat de Schrödinger",  desc:"Posséder votre premier casino quantique.",         cond:e=>(e.batiments.quantique||0)>=1},
+  {id:"s_amel1",  icone:"🔧", nom:"Bricoleur",            desc:"Acheter 10 améliorations.",                        cond:e=>e.ameliorations.length>=10},
+  {id:"s_amel2",  icone:"🛠️", nom:"Ingénieur du vice",    desc:"Acheter 30 améliorations.",                        cond:e=>e.ameliorations.length>=30},
+  {id:"s_or1",    icone:"✨", nom:"Œil vif",              desc:"Attraper un jeton d'or.",                          cond:e=>e.jetonsOrAttrapes>=1},
+  {id:"s_or2",    icone:"🌟", nom:"Chasseur de reflets",  desc:"Attraper 25 jetons d'or.",                         cond:e=>e.jetonsOrAttrapes>=25},
+  {id:"s_rou1",   icone:"🎡", nom:"Baptême de la roue",   desc:"Gagner un pari à la roulette.",                    cond:e=>e.roulette.victoires>=1},
+  {id:"s_rou2",   icone:"🍀", nom:"Veine insolente",      desc:"Gagner 25 paris à la roulette.",                   cond:e=>e.roulette.victoires>=25},
+  {id:"s_rou3",   icone:"🎯", nom:"Numéro plein",         desc:"Gagner un pari sur numéro plein (×36).",           cond:e=>e.roulette.pleinsGagnes>=1},
+  {id:"s_rou4",   icone:"🔥", nom:"La maison tremble",    desc:"Gagner 100 000 jetons en une seule mise.",         cond:e=>e.roulette.plusGrosGain>=100000},
+  {id:"s_pres1",  icone:"◆", nom:"Vendeur d'empire",     desc:"Faire votre premier prestige.",                    cond:e=>e.prestigesTotal>=1},
+  {id:"s_pres2",  icone:"♦️", nom:"Recycleur en série",   desc:"Cumuler 10 diamants.",                             cond:e=>e.diamants>=10},
+  {id:"s_jps",    icone:"⚡", nom:"Machine à sous humaine",desc:"Atteindre 100 000 jetons/seconde.",                cond:e=>productionParSeconde(e, false)>=100000},
+];
+
+// Cases de la roulette : ordre et couleurs (0 = vert). Roulette européenne standard.
+const ORDRE_ROUE = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const ROUGES = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+function couleurNumero(n){ return n===0 ? "v" : (ROUGES.has(n) ? "r" : "n"); }
+
+// Recharge de la roulette (ms) : tirée entre 20 et 30 s.
+const ROULETTE_RECHARGE_MIN = 20000;
+const ROULETTE_RECHARGE_MAX = 30000;
+
+// Jeton d'or : intervalle d'apparition (ms) entre 60 et 180 s ; durée à l'écran.
+const OR_MIN = 60000, OR_MAX = 180000, OR_DUREE = 13000;
+
+// Gains hors ligne : fraction récupérée et plafond (ms).
+const HORS_LIGNE_FRACTION = 0.5;
+const HORS_LIGNE_PLAFOND = 3 * 3600 * 1000; // 3 heures
+
+// Prestige : seuil de référence (1 diamant ≈ racine cubique du total / SEUIL).
+// Réglé pour qu'un premier prestige soit atteignable en une bonne session de jeu.
+const PRESTIGE_SEUIL = 1e10;
+
+// Événements aléatoires : intervalle moyen (ms) entre deux tentatives.
+const EVENT_MIN = 180000, EVENT_MAX = 420000;
+
+// Répliques des habitués déclenchées aux paliers importants.
+const REPLIQUES = [
+  "« Assieds-toi, patron. La nuit est jeune. »",
+  "« La maison ne perd jamais. Elle attend, c'est tout. »",
+  "« Encore une machine ? Bientôt tu ne verras plus le tapis. »",
+  "« Un blackjack de plus et le croupier te tutoie. »",
+  "« Le zéro vert te salue bien, patron. »",
+  "« Cette salle sent le poker et les regrets. J'adore. »",
+  "« Ton bar assèche les portefeuilles mieux qu'un désert. »",
+  "« Tu loges les pigeons, maintenant ? Malin. »",
+  "« Un casino qui flotte… l'inspecteur a le mal de mer. »",
+  "« Tout un quartier ? On t'appelle déjà le Maire. »",
+  "« En orbite ? Même la lune te doit un jeton. »",
+  "« Un casino quantique. Tu gagnes déjà dans tous les univers. »",
+  "« Reviens quand tu veux, patron. On garde ta place au chaud. »",
+];
+
+/* =========================================================================
+   2. ÉTAT — objet sauvegardé dans localStorage
+   ========================================================================= */
+
+const CLE_SAUVEGARDE = "patron_du_tripot_v1";
+
+function etatNeuf(){
+  return {
+    banque: 0,                 // jetons disponibles
+    totalGagne: 0,             // total gagné dans CETTE partie (depuis dernier prestige)
+    totalGlobal: 0,            // total gagné sur toute la vie (jamais remis à zéro) — base du prestige
+    clicsTotal: 0,             // nombre de clics sur le jeton
+    batiments: {},             // { idBatiment: quantité }
+    ameliorations: [],         // liste des ids d'améliorations achetées
+    diamants: 0,               // monnaie de prestige
+    prestigesTotal: 0,         // nombre de prestiges effectués
+    succes: [],                // ids des succès obtenus
+    jetonsOrAttrapes: 0,
+    roulette: {
+      historique: [],          // 10 derniers numéros
+      gainsCumules: 0, pertesCumulees: 0,
+      victoires: 0, defaites: 0,
+      pleinsGagnes: 0, plusGrosGain: 0,
+      prochaineDispo: 0,       // timestamp avant lequel on ne peut pas relancer
+    },
+    effets: [],                // effets actifs : {type, fin, mult...}
+    dernierTick: Date.now(),   // pour les gains hors ligne
+    prochainOr: 0,             // timestamp de la prochaine apparition du jeton d'or
+    prochainEvent: 0,          // timestamp du prochain événement aléatoire
+    creePar: "1.0",
+  };
+}
+
+let etat = etatNeuf();
+
+// État d'interface (non sauvegardé)
+let ui = {
+  vue: "boutique",
+  multi: 1,                    // 1, 10 ou "max"
+  pariChoisi: null,            // pari de roulette sélectionné
+  numPlein: 7,
+  partMise: 0,                 // fraction de la banque à miser
+  roueEnRotation: false,
+  angleRoue: 0,
+};
+
+/* =========================================================================
+   3. UTILITAIRES
+   ========================================================================= */
+
+// Suffixes lisibles — jamais de notation scientifique.
+const SUFFIXES = ["", "k", "M", "Md", "Bn", "Bd", "Tn", "Td", "Qn", "Qd", "Sx", "Sp", "Oc", "No", "Dc"];
+function formaterNombre(n){
+  if(!isFinite(n)) return "∞";
+  if(n < 0) return "-" + formaterNombre(-n);
+  if(n < 1000){
+    // Sous 1000 : on montre au plus 1 décimale si utile
+    return (n % 1 === 0) ? String(n) : n.toFixed(1);
+  }
+  let palier = Math.floor(Math.log10(n) / 3);
+  if(palier >= SUFFIXES.length){
+    // Au-delà de la table : notation par lettres (aa, ab…), toujours pas de scientifique
+    let idx = palier - SUFFIXES.length;
+    let a = String.fromCharCode(97 + Math.floor(idx / 26));
+    let b = String.fromCharCode(97 + (idx % 26));
+    let val = n / Math.pow(10, palier * 3);
+    return val.toFixed(2) + " " + a + b;
+  }
+  let val = n / Math.pow(1000, palier);
+  let txt = val >= 100 ? val.toFixed(0) : val.toFixed(2);
+  // On retire les zéros décimaux inutiles
+  txt = txt.replace(/\.?0+$/, "");
+  return txt + " " + SUFFIXES[palier];
+}
+
+function maintenant(){ return Date.now(); }
+function hasard(min, max){ return min + Math.random() * (max - min); }
+function entierHasard(min, max){ return Math.floor(hasard(min, max + 1)); }
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+function creer(balise, classe){ const el = document.createElement(balise); if(classe) el.className = classe; return el; }
+
+function totalBatiments(e){
+  let t = 0; for(const b of BATIMENTS) t += (e.batiments[b.id] || 0); return t;
+}
+
+/* =========================================================================
+   4. LOGIQUE — coûts, production, achats, améliorations, succès
+   ========================================================================= */
+
+// Coût d'un exemplaire du bâtiment quand on en possède déjà `possede`.
+function coutBatiment(bat, possede){
+  return bat.coutBase * Math.pow(FACTEUR_COUT, possede);
+}
+
+// Coût total pour acheter `quantite` exemplaires (somme géométrique).
+function coutAchat(bat, possede, quantite){
+  const r = FACTEUR_COUT;
+  const base = bat.coutBase * Math.pow(r, possede);
+  return base * (Math.pow(r, quantite) - 1) / (r - 1);
+}
+
+// Combien d'exemplaires on peut s'offrir avec `banque` jetons.
+function quantiteMax(bat, possede, banque){
+  const r = FACTEUR_COUT;
+  const base = bat.coutBase * Math.pow(r, possede);
+  // banque >= base * (r^n - 1)/(r-1)  =>  n <= log_r( banque*(r-1)/base + 1 )
+  const n = Math.floor(Math.log(banque * (r - 1) / base + 1) / Math.log(r));
+  return Math.max(0, n);
+}
+
+// Quantité effective selon le sélecteur (1 / 10 / max) pour un bâtiment.
+function quantiteVisee(bat){
+  const possede = etat.batiments[bat.id] || 0;
+  if(ui.multi === "max") return Math.max(1, quantiteMax(bat, possede, etat.banque));
+  return ui.multi;
+}
+
+// Nombre de paliers d'un bâtiment déjà achetés (améliorations ×2 débloquées).
+function palierBatimentActifs(e, bat){
+  let n = 0;
+  for(const p of bat.paliers){
+    if(e.ameliorations.includes(bat.id + "_p" + p.seuil)) n++;
+  }
+  return n;
+}
+
+// Production d'un bâtiment (tous exemplaires), paliers ×2 inclus mais SANS multiplicateurs globaux.
+function productionBatiment(e, bat){
+  const q = e.batiments[bat.id] || 0;
+  if(q === 0) return 0;
+  const mult = Math.pow(2, palierBatimentActifs(e, bat));
+  return bat.prodBase * q * mult;
+}
+
+// Multiplicateur global appliqué à toute la production (et en partie au clic).
+// avecEffets : inclut la frénésie temporaire (jeton d'or / événements).
+function multiplicateurGlobal(e, avecEffets = true){
+  const nbGlobal = e.ameliorations.filter(id => id.startsWith("glob")).length;
+  const nbSucces = e.succes.length;
+  let m = 1;
+  m *= (1 + 0.05 * nbGlobal);       // améliorations globales : +5 % chacune
+  m *= (1 + 0.02 * e.diamants);     // prestige : +2 % par diamant
+  m *= (1 + 0.01 * nbSucces);       // succès : +1 % chacun
+  if(avecEffets){
+    for(const ef of e.effets){
+      if(ef.type === "frenesie") m *= ef.mult; // frénésie ×7
+    }
+  }
+  return m;
+}
+
+// Production totale par seconde.
+function productionParSeconde(e = etat, avecEffets = true){
+  let base = 0;
+  for(const bat of BATIMENTS) base += productionBatiment(e, bat);
+  return base * multiplicateurGlobal(e, avecEffets);
+}
+
+// Valeur d'un clic (base × améliorations de clic × diamants × succès × effets).
+function valeurClic(e = etat){
+  const nbClic = e.ameliorations.filter(id => id.startsWith("clic")).length;
+  let v = CLIC_BASE * Math.pow(2, nbClic);
+  v *= (1 + 0.02 * e.diamants);
+  v *= (1 + 0.01 * e.succes.length);
+  for(const ef of e.effets){
+    if(ef.type === "frenesie") v *= ef.mult;       // la frénésie booste aussi le clic
+    if(ef.type === "clic777")  v *= ef.mult;       // clic ×777
+  }
+  // Bonus « doigts de fée » : le clic gagne aussi 1 % de la production/seconde
+  v += productionParSeconde(e) * 0.01;
+  return v;
+}
+
+// Ajoute des jetons (banque + totaux).
+function gagnerJetons(montant){
+  etat.banque += montant;
+  etat.totalGagne += montant;
+  etat.totalGlobal += montant;
+}
+
+// --- Achats ---
+
+function acheterBatiment(bat){
+  const q = quantiteVisee(bat);
+  const possede = etat.batiments[bat.id] || 0;
+  const cout = coutAchat(bat, possede, q);
+  if(q < 1 || etat.banque < cout) return false;
+  etat.banque -= cout;
+  etat.batiments[bat.id] = possede + q;
+  verifierRepliques(bat, possede + q);
+  majTout();
+  return true;
+}
+
+// Toutes les améliorations disponibles (bâtiment + clic + global), avec métadonnées unifiées.
+function toutesAmeliorations(){
+  const liste = [];
+  for(const bat of BATIMENTS){
+    for(const p of bat.paliers){
+      liste.push({
+        id: bat.id + "_p" + p.seuil, type: "batiment", batId: bat.id, icone: bat.icone,
+        nom: p.nom, desc: p.desc, cout: bat.coutBase * p.coutMult, seuil: p.seuil,
+      });
+    }
+  }
+  for(const c of AMEL_CLIC) liste.push({ ...c, type: "clic", icone: "👆" });
+  for(const g of AMEL_GLOBAL) liste.push({ ...g, type: "global", icone: "✨" });
+  return liste;
+}
+
+// Une amélioration est-elle débloquée (visible et achetable) ?
+function ameliorationDebloquee(a){
+  if(etat.ameliorations.includes(a.id)) return false; // déjà achetée
+  if(a.type === "batiment"){
+    return (etat.batiments[a.batId] || 0) >= a.seuil;
+  }
+  // clic / global : on les débloque progressivement selon le coût déjà atteint
+  return etat.totalGagne >= a.cout * 0.3;
+}
+
+function acheterAmelioration(a){
+  if(!ameliorationDebloquee(a) || etat.banque < a.cout) return false;
+  etat.banque -= a.cout;
+  etat.ameliorations.push(a.id);
+  notifier("Amélioration achetée", a.nom, "succes-notif");
+  majTout();
+  return true;
+}
+
+// --- Succès ---
+function verifierSucces(){
+  for(const s of SUCCES){
+    if(!etat.succes.includes(s.id) && s.cond(etat)){
+      etat.succes.push(s.id);
+      notifier("Succès débloqué !", s.icone + " " + s.nom + " (+1 %)", "succes-notif");
+    }
+  }
+}
+
+// --- Répliques d'habitués aux paliers ---
+function verifierRepliques(bat, nouveauTotal){
+  const idx = BATIMENTS.indexOf(bat);
+  // Première acquisition d'un bâtiment : réplique dédiée
+  if(nouveauTotal >= 1 && (nouveauTotal - 1) < 1 && idx + 1 < REPLIQUES.length){
+    afficherReplique(REPLIQUES[idx + 1]);
+  } else if([25, 50, 100].includes(nouveauTotal)){
+    afficherReplique(REPLIQUES[entierHasard(0, REPLIQUES.length - 1)]);
+  }
+}
+let timerReplique = null;
+function afficherReplique(txt){
+  const el = $("#aff-replique");
+  el.textContent = txt;
+  clearTimeout(timerReplique);
+  timerReplique = setTimeout(() => { el.textContent = REPLIQUES[0]; }, 8000);
+}
+
+/* =========================================================================
+   5. ROULETTE
+   ========================================================================= */
+
+// Cotes (multiplicateur du gain) et test de victoire pour chaque type de pari.
+const PARIS_ROULETTE = {
+  rouge:  {cote:2,  gagne:n=>couleurNumero(n)==="r"},
+  noir:   {cote:2,  gagne:n=>couleurNumero(n)==="n"},
+  pair:   {cote:2,  gagne:n=>n!==0 && n%2===0},
+  impair: {cote:2,  gagne:n=>n%2===1},
+  d1:     {cote:3,  gagne:n=>n>=1 && n<=12},
+  d2:     {cote:3,  gagne:n=>n>=13 && n<=24},
+  d3:     {cote:3,  gagne:n=>n>=25 && n<=36},
+  plein:  {cote:36, gagne:(n,num)=>n===num},
+};
+
+function miseActuelle(){
+  return Math.floor(etat.banque * ui.partMise);
+}
+
+function lancerRoulette(){
+  if(ui.roueEnRotation) return;
+  if(maintenant() < etat.roulette.prochaineDispo) return;
+  const pari = ui.pariChoisi;
+  if(!pari) { notifier("Roulette", "Choisissez d'abord un pari.", ""); return; }
+  const mise = miseActuelle();
+  if(mise < 1) { notifier("Roulette", "Choisissez d'abord un montant à miser.", ""); return; }
+
+  // On débite la mise immédiatement
+  etat.banque -= mise;
+  ui.roueEnRotation = true;
+  $("#btn-lancer").disabled = true;
+
+  // Tirage
+  const numero = entierHasard(0, 36);
+  const positionCase = ORDRE_ROUE.indexOf(numero);
+  const angleParCase = 360 / 37;
+  // On fait tourner plusieurs tours puis on s'arrête sur la case (flèche en haut)
+  const toursSupp = 6 * 360;
+  const cible = 360 - (positionCase * angleParCase);
+  // On accumule pour toujours tourner vers l'avant
+  ui.angleRoue = Math.floor(ui.angleRoue / 360) * 360 + toursSupp + cible;
+  const roue = $("#roue");
+  roue.style.transform = `rotate(${ui.angleRoue}deg)`;
+
+  const reduireMouvement = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const delai = reduireMouvement ? 450 : 4200;
+
+  setTimeout(() => {
+    resoudreRoulette(numero, pari, mise);
+    ui.roueEnRotation = false;
+    // Recharge 20–30 s
+    etat.roulette.prochaineDispo = maintenant() + hasard(ROULETTE_RECHARGE_MIN, ROULETTE_RECHARGE_MAX);
+    majTout();
+  }, delai);
+}
+
+function resoudreRoulette(numero, pari, mise){
+  const def = PARIS_ROULETTE[pari];
+  const gagne = def.gagne(numero, ui.numPlein);
+  $("#roue-centre").textContent = numero;
+  $("#roue-centre").style.color = couleurNumero(numero)==="r" ? "var(--carmin-clair)"
+    : couleurNumero(numero)==="v" ? "var(--vert-gain)" : "var(--ivoire)";
+
+  // Historique (10 max)
+  etat.roulette.historique.unshift(numero);
+  if(etat.roulette.historique.length > 10) etat.roulette.historique.pop();
+
+  const r = etat.roulette;
+  if(gagne){
+    const gain = mise * def.cote;          // on récupère mise + gain (cote inclut la mise)
+    etat.banque += gain;
+    const gainNet = gain - mise;
+    r.gainsCumules += gainNet; r.victoires++;
+    if(pari === "plein") r.pleinsGagnes++;
+    if(gainNet > r.plusGrosGain) r.plusGrosGain = gainNet;
+    notifier("Gagné à la roulette !", `Le ${numero} tombe. +${formaterNombre(gainNet)} jetons.`, "succes-notif");
+  } else {
+    r.pertesCumulees += mise; r.defaites++;
+    notifier("Perdu à la roulette", `Le ${numero} tombe. La maison remercie.`, "");
+  }
+  verifierSucces();
+}
+
+/* =========================================================================
+   6. JETON D'OR & EFFETS TEMPORAIRES
+   ========================================================================= */
+
+function planifierJetonOr(){
+  etat.prochainOr = maintenant() + hasard(OR_MIN, OR_MAX);
+}
+
+let elemJetonOr = null;
+function apparitionJetonOr(){
+  if(elemJetonOr) return; // un seul à la fois
+  const el = creer("div", "jeton-or");
+  el.textContent = "🪙";
+  el.setAttribute("role", "button");
+  el.setAttribute("aria-label", "Jeton d'or — cliquez vite !");
+  el.tabIndex = 0;
+  // Position de départ aléatoire (traverse l'écran)
+  const depY = hasard(15, 70);
+  const versDroite = Math.random() < 0.5;
+  el.style.top = depY + "vh";
+  el.style.left = versDroite ? "-80px" : "calc(100vw + 80px)";
+  const reduire = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.body.appendChild(el);
+  elemJetonOr = el;
+
+  if(reduire){
+    // Sans animation : on le pose au centre, cliquable quelques secondes
+    el.style.left = "50vw"; el.style.top = "40vh";
+  } else {
+    // Traversée via une transition CSS pilotée en JS
+    el.style.transition = `left ${OR_DUREE}ms linear, top ${OR_DUREE}ms ease-in-out`;
+    requestAnimationFrame(() => {
+      el.style.left = versDroite ? "calc(100vw + 80px)" : "-80px";
+      el.style.top = hasard(15, 70) + "vh";
+    });
+  }
+
+  const attraper = () => {
+    if(!elemJetonOr) return;
+    etat.jetonsOrAttrapes++;
+    declencherEffetOr();
+    retirerJetonOr();
+    verifierSucces();
+    majTout();
+  };
+  el.addEventListener("click", attraper);
+  el.addEventListener("keydown", ev => { if(ev.key==="Enter"||ev.key===" "){ ev.preventDefault(); attraper(); } });
+
+  // Disparition après la durée
+  setTimeout(() => { retirerJetonOr(); planifierJetonOr(); }, OR_DUREE);
+}
+
+function retirerJetonOr(){
+  if(elemJetonOr){ elemJetonOr.remove(); elemJetonOr = null; }
+}
+
+// Effet aléatoire au ramassage du jeton d'or.
+function declencherEffetOr(){
+  const tirage = Math.random();
+  if(tirage < 0.45){
+    // Frénésie ×7 pendant 15 s
+    etat.effets.push({ type:"frenesie", mult:7, fin: maintenant() + 15000, nom:"Frénésie ×7" });
+    notifier("Jeton d'or !", "Frénésie ×7 pendant 15 secondes !", "succes-notif");
+  } else if(tirage < 0.80){
+    // Coffre : 10 minutes de production instantanées
+    const gain = productionParSeconde() * 600;
+    const gainMin = valeurClic() * 100; // filet de sécurité en tout début de partie
+    const total = Math.max(gain, gainMin);
+    gagnerJetons(total);
+    notifier("Jeton d'or — Coffre !", "+" + formaterNombre(total) + " jetons (10 min de prod).", "succes-notif");
+  } else {
+    // Clic ×777 pendant 10 s
+    etat.effets.push({ type:"clic777", mult:777, fin: maintenant() + 10000, nom:"Clic ×777" });
+    notifier("Jeton d'or !", "Clic ×777 pendant 10 secondes !", "succes-notif");
+  }
+}
+
+// Nettoyage des effets expirés (appelé dans la boucle).
+function majEffets(){
+  const avant = etat.effets.length;
+  etat.effets = etat.effets.filter(ef => ef.fin > maintenant());
+  if(etat.effets.length !== avant) majTout();
+}
+
+/* =========================================================================
+   7. ÉVÉNEMENTS ALÉATOIRES (inspection / descente)
+   ========================================================================= */
+
+function planifierEvenement(){
+  etat.prochainEvent = maintenant() + hasard(EVENT_MIN, EVENT_MAX);
+}
+
+function declencherEvenement(){
+  // On replanifie tout de suite : même si le joueur ferme la fenêtre sans choisir
+  // (clic sur le fond / Échap), l'événement ne se re-déclenchera pas en boucle.
+  planifierEvenement();
+  // Seulement si on a de quoi rendre ça intéressant
+  if(etat.banque < 1000){ return; }
+  const amende = Math.floor(etat.banque * hasard(0.08, 0.2));
+  ouvrirModale(`
+    <h2>🚔 Descente surprise</h2>
+    <p>Un inspecteur zélé débarque dans l'arrière-salle. Il a tout vu, ou presque.
+    Il propose un arrangement : une <b>amende de ${formaterNombre(amende)} jetons</b>, et on oublie tout.</p>
+    <p style="font-size:15px;">Ou vous tentez le coup : soit il ne trouve rien (vous ne payez <b>rien</b>),
+    soit ça tourne mal (<b>le double</b>).</p>
+    <div class="actions">
+      <button class="valider" id="ev-payer">Payer l'amende (${formaterNombre(amende)})</button>
+      <button class="danger" id="ev-tenter">Tenter le coup</button>
+    </div>
+  `);
+  $("#ev-payer").addEventListener("click", () => {
+    etat.banque = Math.max(0, etat.banque - amende);
+    fermerModale();
+    notifier("Descente", "Amende payée. L'inspecteur s'en va, satisfait.", "");
+    planifierEvenement(); majTout();
+  });
+  $("#ev-tenter").addEventListener("click", () => {
+    fermerModale();
+    if(Math.random() < 0.5){
+      notifier("Descente", "Il n'a rien trouvé. La chance du patron.", "succes-notif");
+    } else {
+      const perte = amende * 2;
+      etat.banque = Math.max(0, etat.banque - perte);
+      notifier("Descente", "Mauvaise pioche : " + formaterNombre(perte) + " jetons de saisie.", "");
+    }
+    planifierEvenement(); majTout();
+  });
+}
+
+/* =========================================================================
+   8. PRESTIGE
+   ========================================================================= */
+
+// Diamants totaux que le total de vie « vaut » actuellement.
+function diamantsPotentiels(){
+  return Math.floor(Math.cbrt(etat.totalGlobal / PRESTIGE_SEUIL));
+}
+// Diamants gagnés si on prestige maintenant.
+function gainPrestige(){
+  return Math.max(0, diamantsPotentiels() - etat.diamants);
+}
+
+function ouvrirPrestige(){
+  const gain = gainPrestige();
+  if(gain < 1){
+    const manque = PRESTIGE_SEUIL * Math.pow(etat.diamants + 1, 3) - etat.totalGlobal;
+    ouvrirModale(`
+      <h2>◆ Revendre l'empire</h2>
+      <p>Pas encore, patron. Revendre maintenant ne rapporterait <b>aucun diamant</b>.</p>
+      <p style="font-size:15px;">Il vous manque environ <b>${formaterNombre(manque)}</b> jetons de gains cumulés
+      pour décrocher le prochain diamant.</p>
+      <div class="actions"><button class="valider" id="pr-ok">Compris</button></div>
+    `);
+    $("#pr-ok").addEventListener("click", fermerModale);
+    return;
+  }
+  ouvrirModale(`
+    <h2>◆ Revendre l'empire</h2>
+    <p>Vous vendez tout et disparaissez dans la nuit. En échange, vous gagnez
+    <b style="color:#8fd3e0">${gain} diamant${gain>1?"s":""}</b>
+    (soit <b>+${(gain*2).toFixed(0)} %</b> de production permanente).</p>
+    <p><b>Vous perdez :</b> banque, bâtiments, améliorations, progression de la partie.<br>
+    <b>Vous gardez :</b> diamants, succès, et l'orgueil du travail accompli.</p>
+    <div class="actions">
+      <button id="pr-annuler">Pas ce soir</button>
+      <button class="danger" id="pr-valider">Tout revendre (+${gain} ◆)</button>
+    </div>
+  `);
+  $("#pr-annuler").addEventListener("click", fermerModale);
+  $("#pr-valider").addEventListener("click", () => {
+    faireePrestige(gain);
+    fermerModale();
+  });
+}
+
+function faireePrestige(gain){
+  const diamants = etat.diamants + gain;
+  const succes = etat.succes.slice();
+  const prestiges = etat.prestigesTotal + 1;
+  const totalGlobal = etat.totalGlobal;
+  const orAttrapes = etat.jetonsOrAttrapes;
+  const rouletteStats = etat.roulette;
+  // On repart d'un état neuf en conservant ce qui est permanent
+  etat = etatNeuf();
+  etat.diamants = diamants;
+  etat.succes = succes;
+  etat.prestigesTotal = prestiges;
+  etat.totalGlobal = totalGlobal;
+  etat.jetonsOrAttrapes = orAttrapes;
+  // On conserve les stats de roulette permanentes (mais on remet la dispo)
+  rouletteStats.prochaineDispo = 0;
+  etat.roulette = rouletteStats;
+  planifierJetonOr(); planifierEvenement();
+  notifier("Empire revendu", `+${gain} diamant${gain>1?"s":""}. Une nouvelle nuit commence.`, "succes-notif");
+  verifierSucces();
+  majTout();
+  sauvegarder();
+}
+
+/* =========================================================================
+   9. BOUCLE — tick logique (temps réel, pas de dérive) + rendu 30 fps
+   ========================================================================= */
+
+// Tick logique : basé sur le temps réel écoulé depuis le dernier passage.
+function tickLogique(){
+  const t = maintenant();
+  let dt = (t - etat.dernierTick) / 1000; // en secondes
+  etat.dernierTick = t;
+  if(dt < 0) dt = 0;
+  if(dt > 3600) dt = 3600; // garde-fou (les vraies absences longues sont gérées au chargement)
+
+  if(dt > 0){
+    const gain = productionParSeconde() * dt;
+    if(gain > 0) gagnerJetons(gain);
+  }
+
+  // Effets temporaires
+  majEffets();
+
+  // Jeton d'or
+  if(t >= etat.prochainOr && !elemJetonOr){ apparitionJetonOr(); }
+
+  // Événement aléatoire
+  if(t >= etat.prochainEvent && !modaleOuverte()){ declencherEvenement(); }
+
+  verifierSucces();
+}
+
+// Rendu : limité à 30 fps.
+let dernierRendu = 0;
+const INTERVALLE_RENDU = 1000 / 30;
+
+function boucle(ts){
+  if(ts - dernierRendu >= INTERVALLE_RENDU){
+    dernierRendu = ts;
+    rendreCompteurs();
+    rendreBandeauEffet();
+    rendreRecharge();
+  }
+  requestAnimationFrame(boucle);
+}
+
+/* =========================================================================
+   10. SAUVEGARDE — localStorage, export/import, gains hors ligne
+   ========================================================================= */
+
+function sauvegarder(){
+  try{
+    etat.dernierTick = maintenant();
+    localStorage.setItem(CLE_SAUVEGARDE, JSON.stringify(etat));
+  }catch(e){ /* stockage indisponible : on ignore silencieusement */ }
+}
+
+function charger(){
+  try{
+    const brut = localStorage.getItem(CLE_SAUVEGARDE);
+    if(!brut) return false;
+    const donnees = JSON.parse(brut);
+    // Fusion prudente avec un état neuf (compatibilité future)
+    etat = Object.assign(etatNeuf(), donnees);
+    etat.roulette = Object.assign(etatNeuf().roulette, donnees.roulette || {});
+    if(!Array.isArray(etat.effets)) etat.effets = [];
+    return true;
+  }catch(e){ return false; }
+}
+
+// Calcule et applique les gains hors ligne au chargement.
+function appliquerHorsLigne(){
+  const t = maintenant();
+  let ecoule = t - (etat.dernierTick || t);
+  if(ecoule < 60000) { etat.dernierTick = t; return; } // moins d'une minute : on ignore
+  const plafonne = Math.min(ecoule, HORS_LIGNE_PLAFOND);
+  const gain = productionParSeconde() * (plafonne / 1000) * HORS_LIGNE_FRACTION;
+  etat.dernierTick = t;
+  if(gain < 1) return;
+  gagnerJetons(gain);
+  const heures = Math.floor(plafonne / 3600000);
+  const minutes = Math.floor((plafonne % 3600000) / 60000);
+  const duree = heures > 0 ? `${heures} h ${minutes} min` : `${minutes} min`;
+  setTimeout(() => {
+    ouvrirModale(`
+      <h2>🌙 De retour, patron</h2>
+      <p>Pendant votre absence (<b>${duree}</b>, plafonnée à 3 h), l'arrière-salle a continué de tourner.</p>
+      <p>La caisse s'est garnie de <b style="color:var(--laiton-clair)">+${formaterNombre(gain)} jetons</b>
+      (50 % de la production hors ligne).</p>
+      <div class="actions"><button class="valider" id="hl-ok">Encaisser</button></div>
+    `);
+    $("#hl-ok").addEventListener("click", fermerModale);
+  }, 400);
+}
+
+function exporterSauvegarde(){
+  sauvegarder();
+  const texte = btoa(unescape(encodeURIComponent(JSON.stringify(etat))));
+  ouvrirModale(`
+    <h2>Exporter la sauvegarde</h2>
+    <p style="font-size:15px;">Copiez ce code et gardez-le en lieu sûr. Vous pourrez le réimporter plus tard
+    ou sur un autre appareil.</p>
+    <textarea id="zone-export" readonly>${texte}</textarea>
+    <div class="actions">
+      <button class="valider" id="exp-copier">Copier</button>
+      <button id="exp-fichier">Télécharger un fichier</button>
+      <button id="exp-fermer">Fermer</button>
+    </div>
+  `);
+  $("#zone-export").addEventListener("focus", e => e.target.select());
+  $("#exp-copier").addEventListener("click", async () => {
+    try{ await navigator.clipboard.writeText(texte); notifier("Sauvegarde", "Code copié dans le presse-papiers.", "succes-notif"); }
+    catch(e){ const z = $("#zone-export"); z.select(); document.execCommand && document.execCommand("copy"); notifier("Sauvegarde", "Code sélectionné — copiez-le (Ctrl/Cmd+C).", ""); }
+  });
+  $("#exp-fichier").addEventListener("click", () => {
+    const blob = new Blob([texte], {type:"text/plain"});
+    const url = URL.createObjectURL(blob);
+    const a = creer("a"); a.href = url;
+    a.download = "sauvegarde-patron-du-tripot.txt";
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  });
+  $("#exp-fermer").addEventListener("click", fermerModale);
+}
+
+function importerSauvegarde(){
+  ouvrirModale(`
+    <h2>Importer une sauvegarde</h2>
+    <p style="font-size:15px;">Collez ici le code exporté. <b>Attention :</b> cela remplacera votre partie en cours.</p>
+    <textarea id="zone-import" placeholder="Collez le code ici…"></textarea>
+    <div class="actions">
+      <button class="valider" id="imp-valider">Importer</button>
+      <button id="imp-fermer">Annuler</button>
+    </div>
+  `);
+  $("#imp-valider").addEventListener("click", () => {
+    const txt = $("#zone-import").value.trim();
+    if(!txt){ notifier("Import", "Aucun code fourni.", ""); return; }
+    try{
+      const json = decodeURIComponent(escape(atob(txt)));
+      const donnees = JSON.parse(json);
+      if(typeof donnees.banque !== "number") throw new Error("format");
+      etat = Object.assign(etatNeuf(), donnees);
+      etat.roulette = Object.assign(etatNeuf().roulette, donnees.roulette || {});
+      etat.dernierTick = maintenant();
+      fermerModale();
+      notifier("Import réussi", "Votre partie a été restaurée.", "succes-notif");
+      majTout(); sauvegarder();
+    }catch(e){
+      notifier("Import", "Code invalide. Vérifiez le texte collé.", "");
+    }
+  });
+  $("#imp-fermer").addEventListener("click", fermerModale);
+}
+
+function reinitialiser(){
+  ouvrirModale(`
+    <h2>⚠️ Tout effacer</h2>
+    <p>Cette action supprime <b>définitivement</b> votre partie : banque, bâtiments,
+    améliorations, diamants, succès. Il n'y a pas de retour.</p>
+    <p style="font-size:15px;">Pensez à <b>exporter</b> votre sauvegarde avant si vous hésitez.</p>
+    <div class="actions">
+      <button id="rst-annuler">Annuler</button>
+      <button class="danger" id="rst-valider">Effacer définitivement</button>
+    </div>
+  `);
+  $("#rst-annuler").addEventListener("click", fermerModale);
+  $("#rst-valider").addEventListener("click", () => {
+    try{ localStorage.removeItem(CLE_SAUVEGARDE); }catch(e){}
+    etat = etatNeuf();
+    planifierJetonOr(); planifierEvenement();
+    fermerModale();
+    notifier("Partie effacée", "Une page blanche. À vous de jouer, patron.", "");
+    majTout();
+  });
+}
+
+/* =========================================================================
+   11. INTERFACE — rendu et écouteurs
+   ========================================================================= */
+
+// --- Modales ---
+function modaleOuverte(){ return !$("#modale-fond").hidden; }
+function ouvrirModale(html){
+  $("#modale-contenu").innerHTML = html;
+  $("#modale-fond").hidden = false;
+}
+function fermerModale(){ $("#modale-fond").hidden = true; $("#modale-contenu").innerHTML = ""; }
+
+// --- Notifications ---
+function notifier(titre, detail, classe){
+  const n = creer("div", "notif " + (classe || ""));
+  n.innerHTML = `<div class="t">${titre}</div><div class="d">${detail}</div>`;
+  $("#notifs").appendChild(n);
+  setTimeout(() => { n.style.transition = "opacity .4s, transform .4s"; n.style.opacity = "0"; n.style.transform = "translateX(30px)"; }, 3600);
+  setTimeout(() => n.remove(), 4100);
+}
+
+// --- Compteurs du bandeau (rendus à 30 fps) ---
+function rendreCompteurs(){
+  $("#aff-banque").textContent = formaterNombre(Math.floor(etat.banque));
+  $("#aff-jps").textContent = formaterNombre(productionParSeconde());
+  $("#aff-diamants").textContent = formaterNombre(etat.diamants);
+  $("#aff-clic").textContent = "+" + formaterNombre(valeurClic());
+}
+
+// --- Bandeau d'effet en cours ---
+function rendreBandeauEffet(){
+  const cont = $("#bandeau-effet");
+  cont.innerHTML = "";
+  for(const ef of etat.effets){
+    const reste = Math.max(0, ef.fin - maintenant());
+    const total = ef.type === "frenesie" ? 15000 : 10000;
+    const pct = Math.min(100, (reste / total) * 100);
+    const el = creer("div", "effet");
+    el.innerHTML = `<span>${ef.type==="frenesie"?"🔥":"⚡"} ${ef.nom}</span>
+      <span class="barre"><i style="width:${pct}%"></i></span>
+      <span>${Math.ceil(reste/1000)} s</span>`;
+    cont.appendChild(el);
+  }
+}
+
+// --- Recharge de la roulette ---
+function rendreRecharge(){
+  const el = $("#aff-recharge");
+  const btn = $("#btn-lancer");
+  if(!el) return;
+  const reste = etat.roulette.prochaineDispo - maintenant();
+  if(ui.roueEnRotation){
+    el.textContent = "La roue tourne…";
+    btn.disabled = true;
+  } else if(reste > 0){
+    el.textContent = `Prochaine mise dans ${Math.ceil(reste/1000)} s`;
+    btn.disabled = true;
+  } else {
+    el.textContent = "La roue est prête.";
+    btn.disabled = false;
+  }
+}
+
+// --- Rendu complet (appelé aux changements d'état) ---
+function majTout(){
+  rendreCompteurs();
+  rendreBoutique();
+  rendreAmeliorations();
+  rendreRoulette();
+  rendreSucces();
+  rendreStats();
+  rendrePastilleAmel();
+}
+
+function rendreBoutique(){
+  const cont = $("#liste-batiments");
+  cont.innerHTML = "";
+  let premierVerrouille = true;
+  for(let i = 0; i < BATIMENTS.length; i++){
+    const bat = BATIMENTS[i];
+    const possede = etat.batiments[bat.id] || 0;
+    // Verrouillage : on montre le bâtiment suivant seulement si le précédent est débloqué
+    //  (débloqué = possédé au moins 1, ou coût de base atteignable)
+    const debloque = i === 0 || (etat.batiments[BATIMENTS[i-1].id] || 0) >= 1 || etat.totalGagne >= bat.coutBase * 0.5;
+    const q = quantiteVisee(bat);
+    const cout = coutAchat(bat, possede, Math.max(1, q));
+    const abordable = etat.banque >= cout && q >= 1;
+
+    const carte = creer("button", "carte");
+    if(!debloque){ carte.classList.add("verrou"); }
+    else if(!abordable){ carte.classList.add("inaccessible"); }
+
+    if(!debloque && premierVerrouille){
+      // Premier bâtiment verrouillé : on l'affiche en « ??? » pour donner un objectif
+      carte.innerHTML = `
+        <div class="icone">🔒</div>
+        <div class="infos"><div class="nom">Bâtiment verrouillé</div>
+          <div class="desc">Débloqué en approchant ${formaterNombre(bat.coutBase)} jetons gagnés.</div></div>`;
+      cont.appendChild(carte);
+      premierVerrouille = false;
+      break; // on ne montre pas les suivants
+    }
+    if(!debloque) continue;
+
+    const prodUnit = bat.prodBase * Math.pow(2, palierBatimentActifs(etat, bat));
+    carte.innerHTML = `
+      <div class="icone">${bat.icone}</div>
+      <div class="infos">
+        <div class="nom">${bat.nom}</div>
+        <div class="desc">${bat.desc}</div>
+        <div class="prod">${formaterNombre(prodUnit)} jps/u${possede?` · ${formaterNombre(productionBatiment(etat,bat)*multiplicateurGlobal(etat))} jps`:""}</div>
+      </div>
+      <div class="droite">
+        <div class="cout ${abordable?"":"trop-cher"}">${formaterNombre(cout)}${q>1?` <span style="font-size:13px">(×${q})</span>`:""}</div>
+        <div class="nb">${possede}</div>
+      </div>`;
+    carte.addEventListener("click", () => {
+      if(acheterBatiment(bat)) tinter();
+    });
+    cont.appendChild(carte);
+  }
+}
+
+function rendreAmeliorations(){
+  const cont = $("#liste-ameliorations");
+  cont.innerHTML = "";
+  const dispo = toutesAmeliorations().filter(a => ameliorationDebloquee(a));
+  dispo.sort((a,b) => a.cout - b.cout);
+
+  if(dispo.length === 0){
+    cont.innerHTML = `<div style="color:var(--ivoire-doux);font-style:italic;padding:8px;">
+      Aucune amélioration disponible pour l'instant. Achetez des bâtiments pour en débloquer.</div>`;
+  }
+  for(const a of dispo){
+    const abordable = etat.banque >= a.cout;
+    const carte = creer("button", "carte" + (abordable ? "" : " inaccessible"));
+    const etiquette = a.type === "batiment" ? "Bâtiment ×2" : a.type === "clic" ? "Clic ×2" : "Global +5 %";
+    carte.innerHTML = `
+      <div class="icone">${a.icone}</div>
+      <div class="infos">
+        <div class="nom">${a.nom}</div>
+        <div class="desc">${a.desc}</div>
+        <div class="prod">${etiquette}</div>
+      </div>
+      <div class="droite"><div class="cout ${abordable?"":"trop-cher"}">${formaterNombre(a.cout)}</div></div>`;
+    carte.addEventListener("click", () => { if(acheterAmelioration(a)) tinter(); });
+    cont.appendChild(carte);
+  }
+
+  // Galerie des améliorations achetées
+  const gal = $("#galerie-amel");
+  gal.innerHTML = "";
+  const toutes = toutesAmeliorations();
+  for(const id of etat.ameliorations){
+    const a = toutes.find(x => x.id === id);
+    if(!a) continue;
+    const m = creer("div", "medaille");
+    m.textContent = a.icone;
+    m.title = a.nom + " — " + a.desc;
+    gal.appendChild(m);
+  }
+  if(etat.ameliorations.length === 0){
+    gal.innerHTML = `<div style="color:var(--ivoire-doux);font-style:italic;font-size:14px;">
+      Vos améliorations achetées s'afficheront ici.</div>`;
+  }
+}
+
+function rendrePastilleAmel(){
+  const dispo = toutesAmeliorations().filter(a => ameliorationDebloquee(a) && etat.banque >= a.cout);
+  const p = $("#pastille-amel");
+  if(dispo.length > 0){ p.hidden = false; p.textContent = dispo.length; }
+  else p.hidden = true;
+}
+
+function rendreRoulette(){
+  // Dégradé conique de la roue (généré une seule fois idéalement, mais peu coûteux)
+  const roue = $("#roue");
+  if(!roue.dataset.pret){
+    const angleParCase = 360 / 37;
+    let stops = [];
+    for(let i = 0; i < ORDRE_ROUE.length; i++){
+      const n = ORDRE_ROUE[i];
+      const c = couleurNumero(n);
+      const couleur = c === "r" ? "#b3271f" : c === "v" ? "#2f7d43" : "#1c1c1c";
+      const debut = (i * angleParCase).toFixed(2);
+      const fin = ((i+1) * angleParCase).toFixed(2);
+      stops.push(`${couleur} ${debut}deg ${fin}deg`);
+    }
+    roue.style.background = `conic-gradient(${stops.join(",")})`;
+    roue.dataset.pret = "1";
+  }
+
+  // Historique
+  const hist = $("#roulette-historique");
+  hist.innerHTML = "";
+  if(etat.roulette.historique.length === 0){
+    hist.innerHTML = `<span style="color:var(--ivoire-doux);font-size:14px;">Aucun tirage pour l'instant.</span>`;
+  }
+  for(const n of etat.roulette.historique){
+    const p = creer("div", "pastille-res " + couleurNumero(n));
+    p.textContent = n;
+    hist.appendChild(p);
+  }
+
+  // Mise et gain potentiel
+  const mise = miseActuelle();
+  $("#aff-mise").textContent = formaterNombre(mise);
+  const cote = ui.pariChoisi ? PARIS_ROULETTE[ui.pariChoisi].cote : 0;
+  $("#aff-gain-pot").textContent = formaterNombre(mise * cote);
+}
+
+function rendreSucces(){
+  const grille = $("#grille-succes");
+  grille.innerHTML = "";
+  for(const s of SUCCES){
+    const obtenu = etat.succes.includes(s.id);
+    const el = creer("div", "succes" + (obtenu ? "" : " verrou"));
+    el.textContent = s.icone;
+    el.title = obtenu ? `${s.nom} — ${s.desc}` : `??? — ${s.desc}`;
+    grille.appendChild(el);
+  }
+  $("#aff-nb-succes").textContent = etat.succes.length;
+  $("#aff-tot-succes").textContent = SUCCES.length;
+}
+
+function rendreStats(){
+  const cont = $("#liste-stats");
+  const r = etat.roulette;
+  const lignes = [
+    ["Jetons en banque", formaterNombre(Math.floor(etat.banque))],
+    ["Production / seconde", formaterNombre(productionParSeconde())],
+    ["Total gagné (cette partie)", formaterNombre(etat.totalGagne)],
+    ["Total gagné (toute la vie)", formaterNombre(etat.totalGlobal)],
+    ["Clics au total", formaterNombre(etat.clicsTotal)],
+    ["Valeur d'un clic", formaterNombre(valeurClic())],
+    ["Bâtiments possédés", formaterNombre(totalBatiments(etat))],
+    ["Améliorations achetées", `${etat.ameliorations.length}`],
+    ["Diamants", formaterNombre(etat.diamants) + " ◆ (+" + (etat.diamants*2) + " %)"],
+    ["Prestiges effectués", `${etat.prestigesTotal}`],
+    ["Diamants au prochain prestige", `${gainPrestige()} ◆`],
+    ["Succès obtenus", `${etat.succes.length} / ${SUCCES.length}`],
+    ["Jetons d'or attrapés", `${etat.jetonsOrAttrapes}`],
+    ["— Roulette —", ""],
+    ["Victoires / Défaites", `${r.victoires} / ${r.defaites}`],
+    ["Gains cumulés (roulette)", formaterNombre(r.gainsCumules)],
+    ["Pertes cumulées (roulette)", formaterNombre(r.pertesCumulees)],
+    ["Bilan net roulette", formaterNombre(r.gainsCumules - r.pertesCumulees)],
+    ["Plus gros gain (une mise)", formaterNombre(r.plusGrosGain)],
+  ];
+  cont.innerHTML = "";
+  for(const [lib, val] of lignes){
+    const l = creer("div", "stat-ligne");
+    l.innerHTML = `<span>${lib}</span><span class="v">${val}</span>`;
+    cont.appendChild(l);
+  }
+}
+
+// --- Effets sonores discrets (bip de clic via WebAudio, sans fichier externe) ---
+let ctxAudio = null;
+function tinter(){
+  // Petit retour tactile/sonore ; on reste silencieux si l'audio n'est pas dispo
+  try{
+    if(!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctxAudio.createOscillator();
+    const g = ctxAudio.createGain();
+    o.type = "triangle"; o.frequency.value = 440 + Math.random()*80;
+    g.gain.value = 0.03;
+    o.connect(g); g.connect(ctxAudio.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, ctxAudio.currentTime + 0.08);
+    o.stop(ctxAudio.currentTime + 0.09);
+  }catch(e){ /* silence */ }
+}
+
+// --- Animation du clic sur le jeton central ---
+function animerClicJeton(x, y){
+  const reduire = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const zone = $("#zone-jeton");
+  const rect = zone.getBoundingClientRect();
+  const cx = x - rect.left, cy = y - rect.top;
+
+  // Nombre flottant
+  const f = creer("div", "flottant");
+  f.textContent = "+" + formaterNombre(valeurClic());
+  f.style.left = cx + "px"; f.style.top = cy + "px";
+  zone.appendChild(f);
+  if(reduire){
+    f.style.transition = "opacity .4s"; requestAnimationFrame(() => f.style.opacity = "0");
+    setTimeout(() => f.remove(), 450);
+  } else {
+    f.animate([
+      { transform:"translate(-50%,-50%) translateY(0)", opacity:1 },
+      { transform:"translate(-50%,-50%) translateY(-70px)", opacity:0 }
+    ], { duration:900, easing:"ease-out" });
+    setTimeout(() => f.remove(), 900);
+  }
+
+  // Petits jetons projetés
+  if(!reduire){
+    for(let i = 0; i < 4; i++){
+      const p = creer("div", "projection");
+      p.style.left = cx + "px"; p.style.top = cy + "px";
+      zone.appendChild(p);
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 60 + Math.random() * 70;
+      p.animate([
+        { transform:"translate(-50%,-50%)", opacity:1 },
+        { transform:`translate(-50%,-50%) translate(${Math.cos(ang)*dist}px, ${Math.sin(ang)*dist + 40}px) rotate(${Math.random()*360}deg)`, opacity:0 }
+      ], { duration:700, easing:"cubic-bezier(.2,.6,.4,1)" });
+      setTimeout(() => p.remove(), 700);
+    }
+  }
+}
+
+function cliquerJeton(x, y){
+  const gain = valeurClic();
+  gagnerJetons(gain);
+  etat.clicsTotal++;
+  animerClicJeton(x, y);
+  verifierSucces();
+  rendreCompteurs();
+}
+
+// --- Écouteurs ---
+function installerEcouteurs(){
+  // Jeton central : souris + tactile + clavier
+  const jeton = $("#jeton");
+  jeton.addEventListener("click", ev => {
+    // Le clic clavier (Entrée/Espace) déclenche aussi 'click' : on centre l'anim dans ce cas
+    let x = ev.clientX, y = ev.clientY;
+    if(!x && !y){ const r = jeton.getBoundingClientRect(); x = r.left + r.width/2; y = r.top + r.height/2; }
+    cliquerJeton(x, y);
+  });
+
+  // Onglets
+  $$(".onglet").forEach(o => {
+    o.addEventListener("click", () => changerVue(o.dataset.vue));
+  });
+
+  // Sélecteur d'achat multiple
+  $$("#selecteur-multi button").forEach(b => {
+    b.addEventListener("click", () => {
+      ui.multi = b.dataset.multi === "max" ? "max" : parseInt(b.dataset.multi, 10);
+      $$("#selecteur-multi button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      rendreBoutique();
+    });
+  });
+
+  // Roulette : montants
+  $$(".montants button").forEach(b => {
+    b.addEventListener("click", () => {
+      ui.partMise = parseFloat(b.dataset.part);
+      $$(".montants button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      rendreRoulette();
+    });
+  });
+  // Roulette : paris
+  $$("#mises-simples button").forEach(b => {
+    b.addEventListener("click", () => {
+      ui.pariChoisi = b.dataset.pari;
+      $$("#mises-simples button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      $("#ligne-plein").hidden = (b.dataset.pari !== "plein");
+      rendreRoulette();
+    });
+  });
+  $("#num-plein").addEventListener("input", e => {
+    let v = parseInt(e.target.value, 10);
+    if(isNaN(v)) v = 0; v = Math.max(0, Math.min(36, v));
+    ui.numPlein = v; rendreRoulette();
+  });
+  $("#btn-lancer").addEventListener("click", lancerRoulette);
+
+  // Outils
+  $("#btn-export").addEventListener("click", exporterSauvegarde);
+  $("#btn-import").addEventListener("click", importerSauvegarde);
+  $("#btn-reset").addEventListener("click", reinitialiser);
+  $("#btn-prestige").addEventListener("click", ouvrirPrestige);
+
+  // Fermer la modale en cliquant sur le fond
+  $("#modale-fond").addEventListener("click", ev => {
+    if(ev.target === $("#modale-fond")) fermerModale();
+  });
+  // Échap ferme la modale
+  document.addEventListener("keydown", ev => {
+    if(ev.key === "Escape" && modaleOuverte()) fermerModale();
+  });
+
+  // Empêche le double-tap-zoom sur les boutons (renfort du viewport)
+  document.addEventListener("dblclick", ev => ev.preventDefault(), {passive:false});
+
+  // Sauvegarde à la fermeture / mise en arrière-plan
+  window.addEventListener("beforeunload", sauvegarder);
+  document.addEventListener("visibilitychange", () => { if(document.hidden) sauvegarder(); });
+}
+
+function changerVue(vue){
+  ui.vue = vue;
+  $$(".onglet").forEach(o => o.setAttribute("aria-selected", o.dataset.vue === vue));
+  ["boutique","ameliorations","roulette","succes","stats"].forEach(v => {
+    $("#vue-" + v).hidden = (v !== vue);
+  });
+  majTout();
+}
+
+/* =========================================================================
+   12. INIT
+   ========================================================================= */
+
+function init(){
+  const chargee = charger();
+  if(chargee){
+    appliquerHorsLigne();
+  } else {
+    etat.dernierTick = maintenant();
+  }
+  // (Re)planifie les timers s'ils sont dans le passé
+  if(etat.prochainOr <= maintenant()) planifierJetonOr();
+  if(etat.prochainEvent <= maintenant()) planifierEvenement();
+
+  installerEcouteurs();
+  changerVue("boutique");
+  majTout();
+
+  // Boucle logique (temps réel) toutes les 200 ms — robuste en arrière-plan
+  setInterval(tickLogique, 200);
+  // Auto-save toutes les 10 s
+  setInterval(sauvegarder, 10000);
+  // Boucle de rendu (30 fps)
+  requestAnimationFrame(boucle);
+}
+
+// Démarrage
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", init);
+} else { init(); }
+</script>
+</body>
+</html>
