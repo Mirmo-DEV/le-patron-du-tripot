@@ -478,6 +478,7 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
         <div class="stats-liste" id="liste-stats"></div>
         <div class="outils">
           <button class="btn-outil btn-prestige" id="btn-prestige">◆ Revendre l'empire (prestige)</button>
+          <button class="btn-outil" id="btn-son">🔊 Son : activé</button>
           <button class="btn-outil" id="btn-export">Exporter la sauvegarde</button>
           <button class="btn-outil" id="btn-import">Importer une sauvegarde</button>
           <button class="btn-outil danger" id="btn-reset">Tout effacer</button>
@@ -674,7 +675,8 @@ const ROULETTE_RECHARGE_MIN = 20000;
 const ROULETTE_RECHARGE_MAX = 30000;
 
 // Jeton d'or : intervalle d'apparition (ms) entre 60 et 180 s ; durée à l'écran.
-const OR_MIN = 60000, OR_MAX = 180000, OR_DUREE = 13000;
+// Apparition rare (10 à 15 min) pour ne pas déséquilibrer le début de partie.
+const OR_MIN = 600000, OR_MAX = 900000, OR_DUREE = 13000;
 
 // Gains hors ligne : fraction récupérée et plafond (ms).
 const HORS_LIGNE_FRACTION = 0.5;
@@ -733,6 +735,7 @@ function etatNeuf(){
     dernierTick: Date.now(),   // pour les gains hors ligne
     prochainOr: 0,             // timestamp de la prochaine apparition du jeton d'or
     prochainEvent: 0,          // timestamp du prochain événement aléatoire
+    sonActif: true,           // sons et musique d'accueil activés par défaut
     creePar: "1.0",
   };
 }
@@ -1038,6 +1041,7 @@ function resoudreRoulette(numero, pari, mise){
     r.gainsCumules += gainNet; r.victoires++;
     if(pari === "plein") r.pleinsGagnes++;
     if(gainNet > r.plusGrosGain) r.plusGrosGain = gainNet;
+    sonGainRoulette(); // petit bruit d'argent discret
     notifier("Gagné à la roulette !", `Le ${numero} tombe. +${formaterNombre(gainNet)} jetons.`, "succes-notif");
   } else {
     r.pertesCumulees += mise; r.defaites++;
@@ -1110,12 +1114,12 @@ function declencherEffetOr(){
     etat.effets.push({ type:"frenesie", mult:7, fin: maintenant() + 15000, nom:"Frénésie ×7" });
     notifier("Jeton d'or !", "Frénésie ×7 pendant 15 secondes !", "succes-notif");
   } else if(tirage < 0.80){
-    // Coffre : 10 minutes de production instantanées
-    const gain = productionParSeconde() * 600;
-    const gainMin = valeurClic() * 100; // filet de sécurité en tout début de partie
+    // Coffre : 5 minutes de production instantanées (nerfé pour ne pas déséquilibrer le début).
+    const gain = productionParSeconde() * 300;
+    const gainMin = valeurClic() * 30; // petit filet de sécurité en tout début de partie
     const total = Math.max(gain, gainMin);
     gagnerJetons(total);
-    notifier("Jeton d'or — Coffre !", "+" + formaterNombre(total) + " jetons (10 min de prod).", "succes-notif");
+    notifier("Jeton d'or — Coffre !", "+" + formaterNombre(total) + " jetons (5 min de prod).", "succes-notif");
   } else {
     // Clic ×777 pendant 10 s
     etat.effets.push({ type:"clic777", mult:777, fin: maintenant() + 10000, nom:"Clic ×777" });
@@ -1506,6 +1510,7 @@ function majTout(){
   rendreSucces();
   rendreStats();
   rendrePastilleAmel();
+  rendreBoutonSon();
 }
 
 function rendreBoutique(){
@@ -1694,21 +1699,74 @@ function rendreStats(){
   }
 }
 
-// --- Effets sonores discrets (bip de clic via WebAudio, sans fichier externe) ---
+/* --- Sons discrets, entièrement synthétisés en WebAudio (aucun fichier externe) ---
+   Tout est coupé si le son est désactivé (etat.sonActif). Les navigateurs bloquent
+   l'audio tant que l'utilisateur n'a pas interagi : on crée/reprend le contexte au
+   premier geste (voir amorcerAudio). */
 let ctxAudio = null;
-function tinter(){
-  // Petit retour tactile/sonore ; on reste silencieux si l'audio n'est pas dispo
+
+function assurerAudio(){
   try{
     if(!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctxAudio.createOscillator();
-    const g = ctxAudio.createGain();
-    o.type = "triangle"; o.frequency.value = 440 + Math.random()*80;
-    g.gain.value = 0.03;
-    o.connect(g); g.connect(ctxAudio.destination);
-    o.start();
-    g.gain.exponentialRampToValueAtTime(0.0001, ctxAudio.currentTime + 0.08);
-    o.stop(ctxAudio.currentTime + 0.09);
-  }catch(e){ /* silence */ }
+    if(ctxAudio.state === "suspended") ctxAudio.resume();
+    return ctxAudio;
+  }catch(e){ return null; }
+}
+
+// Joue une note simple. debut/duree en secondes (relatifs à maintenant), volume 0..1.
+function jouerNote(freq, debut, duree, type = "sine", volume = 0.08){
+  const ctx = ctxAudio; if(!ctx) return;
+  const t0 = ctx.currentTime + debut;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(volume, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + duree);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(t0); o.stop(t0 + duree + 0.02);
+}
+
+// Petit bip discret à l'achat.
+function tinter(){
+  if(!etat.sonActif) return;
+  if(!assurerAudio()) return;
+  jouerNote(440 + Math.random()*80, 0, 0.08, "triangle", 0.03);
+}
+
+// Bruit d'argent quand on gagne à la roulette : cascade rapide de pièces (pas trop fort).
+function sonGainRoulette(){
+  if(!etat.sonActif) return;
+  if(!assurerAudio()) return;
+  // Petit arpège clair qui monte + grelots aigus, façon pluie de pièces
+  const notes = [784, 988, 1175, 1568]; // sol5, si5, ré6, sol6
+  notes.forEach((f, i) => jouerNote(f, i * 0.05, 0.14, "triangle", 0.05));
+  for(let i = 0; i < 8; i++){
+    jouerNote(1400 + Math.random()*1400, 0.1 + Math.random()*0.35, 0.06, "square", 0.02);
+  }
+}
+
+// Jingle d'accueil : courte phrase « lounge » chaleureuse, jouée une fois par session.
+let accueilJoue = false;
+function musiqueAccueil(){
+  if(accueilJoue || !etat.sonActif) return;
+  if(!assurerAudio()) return;
+  accueilJoue = true;
+  // Petite ligne de basse feutrée + mélodie douce (accord de septième, ambiance jazzy)
+  const basse = [{f:110,t:0},{f:146.83,t:0.5},{f:130.81,t:1.0},{f:98,t:1.5}]; // la-ré-do-sol
+  basse.forEach(n => jouerNote(n.f, n.t, 0.55, "sine", 0.06));
+  const melodie = [
+    {f:440,t:0.0},{f:554.37,t:0.25},{f:659.25,t:0.5},   // la-do#-mi
+    {f:587.33,t:0.9},{f:659.25,t:1.15},{f:880,t:1.5},   // ré-mi-la (résolution)
+  ];
+  melodie.forEach(n => jouerNote(n.f, n.t, 0.4, "triangle", 0.05));
+}
+
+// Amorce l'audio au tout premier geste de l'utilisateur (contrainte navigateur),
+// puis lance le jingle d'accueil.
+function amorcerAudio(){
+  assurerAudio();
+  musiqueAccueil();
 }
 
 // --- Animation du clic sur le jeton central ---
@@ -1827,9 +1885,28 @@ function installerEcouteurs(){
   // Empêche le double-tap-zoom sur les boutons (renfort du viewport)
   document.addEventListener("dblclick", ev => ev.preventDefault(), {passive:false});
 
+  // Bouton Son on/off
+  $("#btn-son").addEventListener("click", () => {
+    etat.sonActif = !etat.sonActif;
+    if(etat.sonActif){ assurerAudio(); jouerNote(660, 0, 0.12, "triangle", 0.05); } // petit test
+    rendreBoutonSon();
+    sauvegarder();
+  });
+
+  // Amorce l'audio + jingle d'accueil au tout premier geste (contrainte navigateur)
+  const amorce = () => { amorcerAudio(); };
+  window.addEventListener("pointerdown", amorce, {once:true});
+  window.addEventListener("keydown", amorce, {once:true});
+
   // Sauvegarde à la fermeture / mise en arrière-plan
   window.addEventListener("beforeunload", sauvegarder);
   document.addEventListener("visibilitychange", () => { if(document.hidden) sauvegarder(); });
+}
+
+// Met à jour le libellé du bouton Son.
+function rendreBoutonSon(){
+  const b = $("#btn-son"); if(!b) return;
+  b.textContent = etat.sonActif ? "🔊 Son : activé" : "🔇 Son : coupé";
 }
 
 function changerVue(vue){
