@@ -191,8 +191,10 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
   margin-bottom:8px; }
 .bj-mains{ display:flex; flex-direction:column; gap:14px; margin-bottom:12px; }
 .bj-main .lib{ font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--ivoire-doux);
-  margin-bottom:5px; display:flex; justify-content:space-between; }
-.bj-main .lib .score{ color:var(--laiton-clair); font-weight:700; }
+  margin-bottom:6px; display:flex; justify-content:space-between; align-items:baseline; }
+/* Total de la main : nettement plus grand et lisible que le reste du libellé */
+.bj-main .lib .score{ font-family:var(--titre); font-weight:900; font-size:30px; line-height:1;
+  color:var(--laiton-clair); text-shadow:1px 1px 0 #000; letter-spacing:0; }
 .bj-cartes{ display:flex; gap:6px; flex-wrap:wrap; min-height:66px; }
 .bj-carte{ width:44px; height:62px; border-radius:6px; background:var(--ivoire);
   border:1px solid #8a7a55; display:flex; flex-direction:column; align-items:center;
@@ -203,14 +205,28 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
   border-color:var(--laiton); color:transparent; position:relative; }
 .bj-carte.cachee::after{ content:"🂠"; position:absolute; inset:0; display:flex; align-items:center;
   justify-content:center; font-size:26px; color:var(--laiton); }
+/* Petite animation de distribution : la carte arrive d'en haut en tournant légèrement */
+@keyframes bjDistribution{
+  from{ opacity:0; transform:translateY(-22px) scale(.8) rotate(-8deg); }
+  to{ opacity:1; transform:translateY(0) scale(1) rotate(0deg); }
+}
+/* Petite animation de révélation : la carte cachée du croupier se « retourne » */
+@keyframes bjRevele{
+  from{ transform:scaleX(0); }
+  to{ transform:scaleX(1); }
+}
+.bj-carte.distribuee{ animation:bjDistribution .32s ease-out; }
+.bj-carte.revelee{ animation:bjRevele .28s ease-out; }
 .bj-message{ text-align:center; font-family:var(--titre); font-size:16px; color:var(--laiton-clair);
   min-height:1.4em; margin-bottom:10px; }
 .bj-mises{ display:flex; gap:6px; width:100%; margin-bottom:8px; }
 .bj-mises button{ flex:1; padding:9px 4px; border:2px solid var(--laiton); border-radius:8px;
   background:#0e2c20; color:var(--ivoire-doux); font-weight:600; min-height:40px; }
 .bj-mises button[aria-pressed="true"]{ background:var(--laiton); color:#1a1207; }
-.bj-mise-actuelle{ text-align:center; font-size:14px; color:var(--ivoire-doux); margin-bottom:8px; }
+.bj-mise-actuelle{ text-align:center; font-size:14px; color:var(--ivoire-doux); margin-bottom:2px; }
 .bj-mise-actuelle b{ color:var(--laiton-clair); font-family:var(--titre); }
+.bj-gain-potentiel{ text-align:center; font-size:13px; color:var(--ivoire-doux); margin-bottom:8px; }
+.bj-gain-potentiel b{ color:var(--vert-gain); font-family:var(--titre); }
 .bj-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 .bj-actions button{ flex:1 1 100px; padding:12px 8px; border:2px solid var(--laiton-clair);
   border-radius:10px; background:linear-gradient(180deg,var(--carmin),#8a1c15); color:#fff;
@@ -886,6 +902,10 @@ let ui = {
   bj: {                         // état de la manche de blackjack en cours (non sauvegardé)
     enCours: false, resolu: false, mise: 0, partMise: 0,
     mainJoueur: [], mainCroupier: [], message: "",
+    // Suivi pour les animations : combien de cartes étaient déjà affichées au
+    // rendu précédent (pour n'animer que les nouvelles), et si la carte
+    // cachée du croupier a déjà joué son animation de révélation.
+    nbAffJoueur: 0, nbAffCroupier: 0, croupierDejaRevele: false,
   },
 };
 
@@ -1242,6 +1262,8 @@ function bjCommencerManche(){
   ui.bj.mainJoueur = [bjTirerCarte(), bjTirerCarte()];
   ui.bj.mainCroupier = [bjTirerCarte(), bjTirerCarte()];
   ui.bj.message = "À vous de jouer : tirez ou restez.";
+  // Nouvelle manche : on repart de zéro pour les animations de distribution/révélation
+  ui.bj.nbAffJoueur = 0; ui.bj.nbAffCroupier = 0; ui.bj.croupierDejaRevele = false;
 
   // Blackjack naturel (l'un ou l'autre) : résolution immédiate
   if(bjEstBlackjack(ui.bj.mainJoueur) || bjEstBlackjack(ui.bj.mainCroupier)){
@@ -2112,18 +2134,43 @@ function basculerJeuTable(id){
 function rendreBlackjack(){
   const panneau = $("#jeux-panneau");
   const b = ui.bj;
+  const reduireMouvement = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const carteHTML = (c, cachee) => cachee
-    ? `<div class="bj-carte cachee"></div>`
-    : `<div class="bj-carte${c.rouge ? " rouge" : ""}"><span>${c.rang}</span><span>${c.symbole}</span></div>`;
+  // On n'anime que les cartes NOUVELLEMENT distribuées depuis le rendu précédent
+  // (sinon toute la main rejouerait son animation à chaque rafraîchissement).
+  const carteHTML = (c, i, total, cachee, estCroupier) => {
+    if(cachee) return `<div class="bj-carte cachee"></div>`;
+    const dejaAffichee = i < (estCroupier ? b.nbAffCroupier : b.nbAffJoueur);
+    const classeAnim = (!reduireMouvement && !dejaAffichee) ? " distribuee" : "";
+    return `<div class="bj-carte${c.rouge ? " rouge" : ""}${classeAnim}"><span>${c.rang}</span><span>${c.symbole}</span></div>`;
+  };
 
   const secondeCarteCachee = b.enCours && !b.resolu;
-  const cartesCroupierHTML = b.mainCroupier.map((c, i) => carteHTML(c, secondeCarteCachee && i === 1)).join("");
+  // La 2e carte du croupier vient d'être révélée si elle était cachée au rendu
+  // précédent (nbAffCroupier valait alors 1) et ne l'est plus maintenant.
+  const revelationEnCours = !secondeCarteCachee && b.mainCroupier.length === 2
+    && b.nbAffCroupier === 1 && !b.croupierDejaRevele;
+
+  const cartesCroupierHTML = b.mainCroupier.map((c, i) => {
+    const cacheeCette = secondeCarteCachee && i === 1;
+    if(cacheeCette) return carteHTML(c, i, b.mainCroupier.length, true, true);
+    if(i === 1 && revelationEnCours && !reduireMouvement){
+      return `<div class="bj-carte${c.rouge ? " rouge" : ""} revelee"><span>${c.rang}</span><span>${c.symbole}</span></div>`;
+    }
+    return carteHTML(c, i, b.mainCroupier.length, false, true);
+  }).join("");
   const scoreCroupier = secondeCarteCachee ? "?" : bjScore(b.mainCroupier);
+  const cartesJoueurHTML = b.mainJoueur.map((c, i) => carteHTML(c, i, b.mainJoueur.length, false, false)).join("");
+
+  // Gain potentiel selon la mise actuelle (main normale 1:1, blackjack naturel 3:2)
+  const miseCourante = bjMiseActuelle();
+  const gainNormal = miseCourante;
+  const gainBlackjack = Math.floor(miseCourante * 1.5);
 
   panneau.innerHTML = `
     <div class="bj-titre">🃏 Blackjack</div>
-    <div class="bj-mise-actuelle">Mise : <b>${formaterNombre(bjMiseActuelle())}</b> jetons</div>
+    <div class="bj-mise-actuelle">Mise : <b>${formaterNombre(miseCourante)}</b> jetons</div>
+    <div class="bj-gain-potentiel">Gain potentiel : <b>+${formaterNombre(gainNormal)}</b> · Blackjack : <b>+${formaterNombre(gainBlackjack)}</b></div>
     <div class="bj-mises" id="bj-mises">
       <button data-part="0.10" aria-pressed="${b.partMise === 0.10}">10 %</button>
       <button data-part="0.25" aria-pressed="${b.partMise === 0.25}">25 %</button>
@@ -2137,7 +2184,7 @@ function rendreBlackjack(){
       </div>
       <div class="bj-main">
         <div class="lib"><span>Vous</span><span class="score">${b.mainJoueur.length ? bjScore(b.mainJoueur) : ""}</span></div>
-        <div class="bj-cartes">${b.mainJoueur.map(c => carteHTML(c, false)).join("") || '<span style="color:var(--ivoire-doux);font-size:13px;">Misez pour être servi.</span>'}</div>
+        <div class="bj-cartes">${cartesJoueurHTML || '<span style="color:var(--ivoire-doux);font-size:13px;">Misez pour être servi.</span>'}</div>
       </div>
     </div>
     <div class="bj-message">${b.message || ""}</div>
@@ -2156,6 +2203,12 @@ function rendreBlackjack(){
       <div>Bilan net<br><b>${formaterNombre(etat.blackjack.gainsCumules - etat.blackjack.pertesCumulees)}</b></div>
     </div>
   `;
+
+  // Met à jour les compteurs pour que le prochain rendu sache quelles cartes
+  // sont déjà « connues » (ne pas les réanimer).
+  b.nbAffJoueur = b.mainJoueur.length;
+  b.nbAffCroupier = secondeCarteCachee ? 1 : b.mainCroupier.length;
+  if(revelationEnCours) b.croupierDejaRevele = true;
 
   // Écouteurs (le panneau étant entièrement régénéré, on les rattache à chaque rendu)
   $$("#bj-mises button").forEach(btn => {
