@@ -200,8 +200,19 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
   color:var(--ivoire-doux); border-radius:8px; font-weight:600; min-height:42px; letter-spacing:1px; }
 .multi button[aria-pressed="true"]{ background:var(--laiton); color:#1a1207; }
 
-/* Cartes de bâtiment / amélioration */
+/* Listes défilantes (bâtiments + améliorations) : hauteur bornée + défilement
+   INTERNE, pour ne plus avoir à faire défiler toute la page jusqu'en bas. */
 .liste{ display:flex; flex-direction:column; gap:8px; }
+.liste, #liste-ameliorations{
+  max-height:60vh; overflow-y:auto; overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch; padding-right:6px;
+  scrollbar-width:thin; scrollbar-color:var(--laiton) #0e2c20;
+}
+.liste::-webkit-scrollbar, #liste-ameliorations::-webkit-scrollbar{ width:10px; }
+.liste::-webkit-scrollbar-track, #liste-ameliorations::-webkit-scrollbar-track{
+  background:#0e2c20; border-radius:8px; }
+.liste::-webkit-scrollbar-thumb, #liste-ameliorations::-webkit-scrollbar-thumb{
+  background:var(--laiton); border-radius:8px; border:2px solid #0e2c20; }
 .carte{
   display:flex; align-items:center; gap:10px; text-align:left; width:100%;
   padding:10px 12px; border:2px solid rgba(201,165,78,.45); border-radius:var(--rayon);
@@ -384,6 +395,11 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
   .corps{ grid-template-columns:1fr; }
   .panneau{ order:2; }
   body{ font-size:17px; }
+  /* Jeton et table plus compacts : les onglets et la boutique sont atteignables
+     sans descendre toute la page. */
+  .table{ min-height:auto; padding-top:16px; padding-bottom:16px; gap:12px; }
+  .zone-jeton{ width:min(56vw,230px); height:min(56vw,230px); }
+  .liste, #liste-ameliorations{ max-height:56vh; }
 }
 
 /* ---------- Respect de prefers-reduced-motion ---------- */
@@ -1696,6 +1712,7 @@ function majTout(){
 
 function rendreBoutique(){
   const cont = $("#liste-batiments");
+  const scrollAvant = cont.scrollTop; // préserve la position de défilement (rebuild 1×/s)
   cont.innerHTML = "";
   let premierVerrouille = true;
   for(let i = 0; i < BATIMENTS.length; i++){
@@ -1743,10 +1760,12 @@ function rendreBoutique(){
     });
     cont.appendChild(carte);
   }
+  cont.scrollTop = scrollAvant; // restaure la position de défilement
 }
 
 function rendreAmeliorations(){
   const cont = $("#liste-ameliorations");
+  const scrollAvant = cont.scrollTop; // préserve la position de défilement (rebuild 1×/s)
   cont.innerHTML = "";
   const dispo = toutesAmeliorations().filter(a => ameliorationDebloquee(a));
   dispo.sort((a,b) => a.cout - b.cout);
@@ -1771,6 +1790,7 @@ function rendreAmeliorations(){
     carte.addEventListener("click", () => { if(acheterAmelioration(a)) tinter(); });
     cont.appendChild(carte);
   }
+  cont.scrollTop = scrollAvant; // restaure la position de défilement
 
   // Galerie des améliorations achetées
   const gal = $("#galerie-amel");
