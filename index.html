@@ -177,6 +177,51 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
   font-size:clamp(18px,3vw,26px); color:var(--ivoire); text-shadow:1px 1px 2px #000;
   pointer-events:none; z-index:6; will-change:transform,opacity; }
 
+/* ---------- Sélecteur de jeux de table (sous le jeton) ---------- */
+.jeux-selecteur{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; width:100%; z-index:1; }
+.jeu-btn{ padding:9px 16px; border:2px solid var(--laiton); border-radius:20px; background:#0e2c20;
+  color:var(--ivoire-doux); font-weight:600; font-size:15px; min-height:42px; letter-spacing:.3px; }
+.jeu-btn[aria-selected="true"]{ background:var(--laiton); color:#1a1207; font-weight:700; }
+.jeux-panneau{ width:100%; background:var(--feutre-fonce); border:2px solid rgba(201,165,78,.5);
+  border-radius:var(--rayon); padding:14px; margin-top:2px; z-index:1; }
+.jeux-panneau[hidden]{ display:none; }
+
+/* ---------- Blackjack ---------- */
+.bj-titre{ font-family:var(--titre); font-size:20px; color:var(--laiton-clair); text-align:center;
+  margin-bottom:8px; }
+.bj-mains{ display:flex; flex-direction:column; gap:14px; margin-bottom:12px; }
+.bj-main .lib{ font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--ivoire-doux);
+  margin-bottom:5px; display:flex; justify-content:space-between; }
+.bj-main .lib .score{ color:var(--laiton-clair); font-weight:700; }
+.bj-cartes{ display:flex; gap:6px; flex-wrap:wrap; min-height:66px; }
+.bj-carte{ width:44px; height:62px; border-radius:6px; background:var(--ivoire);
+  border:1px solid #8a7a55; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; font-family:var(--titre); font-weight:700; font-size:15px;
+  color:#1a1207; box-shadow:1px 2px 4px rgba(0,0,0,.4); flex:0 0 auto; }
+.bj-carte.rouge{ color:var(--carmin); }
+.bj-carte.cachee{ background:linear-gradient(135deg,#123829,#0e2c20 60%);
+  border-color:var(--laiton); color:transparent; position:relative; }
+.bj-carte.cachee::after{ content:"🂠"; position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; font-size:26px; color:var(--laiton); }
+.bj-message{ text-align:center; font-family:var(--titre); font-size:16px; color:var(--laiton-clair);
+  min-height:1.4em; margin-bottom:10px; }
+.bj-mises{ display:flex; gap:6px; width:100%; margin-bottom:8px; }
+.bj-mises button{ flex:1; padding:9px 4px; border:2px solid var(--laiton); border-radius:8px;
+  background:#0e2c20; color:var(--ivoire-doux); font-weight:600; min-height:40px; }
+.bj-mises button[aria-pressed="true"]{ background:var(--laiton); color:#1a1207; }
+.bj-mise-actuelle{ text-align:center; font-size:14px; color:var(--ivoire-doux); margin-bottom:8px; }
+.bj-mise-actuelle b{ color:var(--laiton-clair); font-family:var(--titre); }
+.bj-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+.bj-actions button{ flex:1 1 100px; padding:12px 8px; border:2px solid var(--laiton-clair);
+  border-radius:10px; background:linear-gradient(180deg,var(--carmin),#8a1c15); color:#fff;
+  font-weight:700; font-size:15px; text-transform:uppercase; letter-spacing:.5px; min-height:48px;
+  font-family:var(--titre); }
+.bj-actions button:disabled{ opacity:.4; cursor:not-allowed; filter:grayscale(.4); }
+.bj-actions button.secondaire{ background:#0e2c20; color:var(--ivoire); }
+.bj-stats{ display:flex; justify-content:space-around; gap:8px; margin-top:10px; font-size:13px;
+  color:var(--ivoire-doux); text-align:center; flex-wrap:wrap; }
+.bj-stats b{ display:block; color:var(--laiton-clair); font-family:var(--titre); font-size:16px; }
+
 /* ---------- Panneau à onglets (droite) ---------- */
 .panneau{ display:flex; flex-direction:column; gap:12px; min-width:0; }
 .onglets{ display:flex; gap:6px; flex-wrap:wrap; }
@@ -452,6 +497,12 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
       <div style="font-size:15px;color:var(--ivoire-doux);text-align:center;">
         Espace ou Entrée pour taper le jeton
       </div>
+
+      <!-- Sélecteur de jeux de table : extensible (Blackjack aujourd'hui, d'autres
+           jeux viendront s'ajouter ici plus tard). Un seul jeu ouvert à la fois :
+           cliquer sur un jeu ouvert le referme ; cliquer sur un autre jeu bascule dessus. -->
+      <div class="jeux-selecteur" id="jeux-selecteur" role="tablist" aria-label="Jeux de table"></div>
+      <div class="jeux-panneau" id="jeux-panneau" hidden></div>
     </section>
 
     <!-- Panneau à onglets (droite) -->
@@ -582,13 +633,15 @@ button{ font-family:var(--ui); cursor:pointer; color:inherit; }
      3. UTILITAIRES   — formatage, RNG, DOM
      4. LOGIQUE       — coûts, production, achats, améliorations, succès
      5. ROULETTE      — mises et tirage
-     6. JETON D'OR & EFFETS
-     7. ÉVÉNEMENTS ALÉATOIRES
-     8. PRESTIGE
-     9. BOUCLE        — tick logique (temps réel) + rendu 30 fps
-    10. SAUVEGARDE    — localStorage, export/import, hors ligne
-    11. INTERFACE     — rendu des panneaux et écouteurs
-    12. INIT
+     6. BLACKJACK     — mises, cartes, tirage/reste/double, croupier
+     7. JETON D'OR & EFFETS
+     8. ÉVÉNEMENTS ALÉATOIRES
+     9. PRESTIGE
+    10. BOUCLE        — tick logique (temps réel) + rendu 30 fps
+    11. SAUVEGARDE    — localStorage, export/import, hors ligne
+    12. CLASSEMENT PARTAGÉ
+    13. INTERFACE     — rendu des panneaux et écouteurs
+    14. INIT
    ========================================================================= */
 
 /* =========================================================================
@@ -802,6 +855,11 @@ function etatNeuf(){
       pleinsGagnes: 0, plusGrosGain: 0,
       prochaineDispo: 0,       // timestamp avant lequel on ne peut pas relancer
     },
+    blackjack: {
+      gainsCumules: 0, pertesCumulees: 0,
+      victoires: 0, defaites: 0, push: 0,
+      plusGrosGain: 0,
+    },
     effets: [],                // effets actifs : {type, fin, mult...}
     dernierTick: Date.now(),   // pour les gains hors ligne
     prochainOr: 0,             // timestamp de la prochaine apparition du jeton d'or
@@ -824,6 +882,11 @@ let ui = {
   partMise: 0,                 // fraction de la banque à miser
   roueEnRotation: false,
   angleRoue: 0,
+  jeuOuvert: null,              // id du jeu de table actuellement ouvert sous le jeton
+  bj: {                         // état de la manche de blackjack en cours (non sauvegardé)
+    enCours: false, resolu: false, mise: 0, partMise: 0,
+    mainJoueur: [], mainCroupier: [], message: "",
+  },
 };
 
 /* =========================================================================
@@ -1124,7 +1187,163 @@ function resoudreRoulette(numero, pari, mise){
 }
 
 /* =========================================================================
-   6. JETON D'OR & EFFETS TEMPORAIRES
+   6. BLACKJACK — mises, cartes, tirer/rester/doubler, croupier
+   ========================================================================= */
+
+// Jeux de table sélectionnables sous le jeton. Tableau volontairement simple
+// pour qu'il soit facile d'ajouter d'autres jeux ici plus tard (ex. bandit
+// manchot) : un id, un nom affiché, et le reste de l'architecture (sélecteur,
+// panneau exclusif) suit automatiquement.
+const JEUX_TABLE = [
+  { id:"blackjack", nom:"🃏 Blackjack" },
+];
+
+const BJ_RANGS = ["2","3","4","5","6","7","8","9","10","V","D","R","A"];
+const BJ_SYMBOLES = ["♠","♥","♦","♣"];
+const BJ_SYMBOLES_ROUGES = new Set(["♥","♦"]);
+
+function bjValeurCarte(rang){
+  if(rang === "A") return 11;
+  if(rang === "V" || rang === "D" || rang === "R") return 10;
+  return Number(rang);
+}
+
+// Pioche une carte au hasard (sabot infini simulé : pas de gestion de deck
+// réel ni de comptage de cartes, cohérent avec un jeu de simulation).
+function bjTirerCarte(){
+  const rang = BJ_RANGS[entierHasard(0, BJ_RANGS.length - 1)];
+  const symbole = BJ_SYMBOLES[entierHasard(0, BJ_SYMBOLES.length - 1)];
+  return { rang, symbole, rouge: BJ_SYMBOLES_ROUGES.has(symbole) };
+}
+
+// Calcule le score d'une main en gérant les as (valent 11, ou 1 si besoin).
+function bjScore(main){
+  let total = 0, as = 0;
+  for(const c of main){
+    total += bjValeurCarte(c.rang);
+    if(c.rang === "A") as++;
+  }
+  while(total > 21 && as > 0){ total -= 10; as--; }
+  return total;
+}
+
+function bjEstBlackjack(main){ return main.length === 2 && bjScore(main) === 21; }
+
+// Mise actuelle choisie via les boutons rapides (10 % / 25 % / 50 % / tout).
+function bjMiseActuelle(){ return Math.floor(etat.banque * ui.bj.partMise); }
+
+function bjCommencerManche(){
+  const mise = bjMiseActuelle();
+  if(ui.bj.enCours || mise < 1 || etat.banque < mise) return;
+  etat.banque -= mise;
+  ui.bj.mise = mise;
+  ui.bj.enCours = true;
+  ui.bj.resolu = false;
+  ui.bj.mainJoueur = [bjTirerCarte(), bjTirerCarte()];
+  ui.bj.mainCroupier = [bjTirerCarte(), bjTirerCarte()];
+  ui.bj.message = "À vous de jouer : tirez ou restez.";
+
+  // Blackjack naturel (l'un ou l'autre) : résolution immédiate
+  if(bjEstBlackjack(ui.bj.mainJoueur) || bjEstBlackjack(ui.bj.mainCroupier)){
+    bjResoudre();
+  }
+  rendreBlackjack();
+}
+
+function bjTirer(){
+  if(!ui.bj.enCours || ui.bj.resolu) return;
+  ui.bj.mainJoueur.push(bjTirerCarte());
+  if(bjScore(ui.bj.mainJoueur) > 21){
+    ui.bj.message = "Vous avez sauté ! La maison remercie.";
+    bjResoudre();
+  }
+  rendreBlackjack();
+}
+
+function bjRester(){
+  if(!ui.bj.enCours || ui.bj.resolu) return;
+  bjJouerCroupier();
+}
+
+function bjDoubler(){
+  if(!ui.bj.enCours || ui.bj.resolu || ui.bj.mainJoueur.length !== 2) return;
+  if(etat.banque < ui.bj.mise) return; // pas assez pour doubler la mise
+  etat.banque -= ui.bj.mise;
+  ui.bj.mise *= 2;
+  ui.bj.mainJoueur.push(bjTirerCarte());
+  if(bjScore(ui.bj.mainJoueur) > 21){
+    ui.bj.message = "Vous avez sauté en doublant ! Aïe.";
+    bjResoudre();
+  } else {
+    bjJouerCroupier();
+  }
+  rendreBlackjack();
+}
+
+// Le croupier tire jusqu'à 17 ou plus (reste sur tout 17, y compris souple),
+// puis on résout la manche.
+function bjJouerCroupier(){
+  while(bjScore(ui.bj.mainCroupier) < 17){
+    ui.bj.mainCroupier.push(bjTirerCarte());
+  }
+  bjResoudre();
+}
+
+function bjResoudre(){
+  ui.bj.resolu = true;
+  ui.bj.enCours = false;
+  const sj = bjScore(ui.bj.mainJoueur);
+  const sc = bjScore(ui.bj.mainCroupier);
+  const bjJoueur = bjEstBlackjack(ui.bj.mainJoueur);
+  const bjCroupier = bjEstBlackjack(ui.bj.mainCroupier);
+  const mise = ui.bj.mise;
+  const s = etat.blackjack;
+  let gainNet = 0;
+
+  if(sj > 21){
+    gainNet = -mise;
+    ui.bj.message = ui.bj.message || `Vous sautez à ${sj}. La maison remercie.`;
+  } else if(bjJoueur && bjCroupier){
+    gainNet = 0; etat.banque += mise;
+    ui.bj.message = "Blackjack des deux côtés — égalité, mise rendue.";
+  } else if(bjJoueur){
+    gainNet = Math.floor(mise * 1.5);
+    etat.banque += mise + gainNet;
+    ui.bj.message = `Blackjack ! +${formaterNombre(gainNet)} jetons.`;
+  } else if(bjCroupier){
+    gainNet = -mise;
+    ui.bj.message = `La maison a le blackjack (${sc}). Vous perdez.`;
+  } else if(sc > 21){
+    gainNet = mise; etat.banque += mise * 2;
+    ui.bj.message = `La maison saute à ${sc} ! +${formaterNombre(gainNet)} jetons.`;
+  } else if(sj > sc){
+    gainNet = mise; etat.banque += mise * 2;
+    ui.bj.message = `${sj} contre ${sc} : vous gagnez ! +${formaterNombre(gainNet)} jetons.`;
+  } else if(sj < sc){
+    gainNet = -mise;
+    ui.bj.message = `${sj} contre ${sc} : la maison gagne.`;
+  } else {
+    gainNet = 0; etat.banque += mise;
+    ui.bj.message = `Égalité à ${sj} — mise rendue.`;
+  }
+
+  if(gainNet > 0){
+    s.gainsCumules += gainNet; s.victoires++;
+    if(gainNet > s.plusGrosGain) s.plusGrosGain = gainNet;
+    sonGainRoulette(); // petit bruit d'argent (partagé avec la roulette)
+    notifier("Blackjack gagné !", ui.bj.message, "succes-notif");
+  } else if(gainNet < 0){
+    s.pertesCumulees += -gainNet; s.defaites++;
+    notifier("Blackjack perdu", ui.bj.message, "");
+  } else {
+    s.push++;
+  }
+  verifierSucces();
+  rendreBlackjack();
+}
+
+/* =========================================================================
+   7. JETON D'OR & EFFETS TEMPORAIRES
    ========================================================================= */
 
 function planifierJetonOr(){
@@ -1208,7 +1427,7 @@ function majEffets(){
 }
 
 /* =========================================================================
-   7. ÉVÉNEMENTS ALÉATOIRES (inspection / descente)
+   8. ÉVÉNEMENTS ALÉATOIRES (inspection / descente)
    ========================================================================= */
 
 function planifierEvenement(){
@@ -1253,7 +1472,7 @@ function declencherEvenement(){
 }
 
 /* =========================================================================
-   8. PRESTIGE
+   9. PRESTIGE
    ========================================================================= */
 
 // Diamants totaux que le total de vie « vaut » actuellement.
@@ -1305,6 +1524,7 @@ function faireePrestige(gain){
   const totalGlobal = etat.totalGlobal;
   const orAttrapes = etat.jetonsOrAttrapes;
   const rouletteStats = etat.roulette;
+  const blackjackStats = etat.blackjack;
   const sonActif = etat.sonActif;
   const pseudo = etat.pseudo;
   const idJoueur = etat.idJoueur;
@@ -1318,9 +1538,10 @@ function faireePrestige(gain){
   etat.sonActif = sonActif;
   etat.pseudo = pseudo;
   etat.idJoueur = idJoueur;
-  // On conserve les stats de roulette permanentes (mais on remet la dispo)
+  // On conserve les stats de roulette et de blackjack permanentes (mais on remet la dispo)
   rouletteStats.prochaineDispo = 0;
   etat.roulette = rouletteStats;
+  etat.blackjack = blackjackStats;
   planifierJetonOr(); planifierEvenement();
   notifier("Empire revendu", `+${gain} diamant${gain>1?"s":""}. Une nouvelle nuit commence.`, "succes-notif");
   verifierSucces();
@@ -1330,7 +1551,7 @@ function faireePrestige(gain){
 }
 
 /* =========================================================================
-   9. BOUCLE — tick logique (temps réel, pas de dérive) + rendu 30 fps
+   10. BOUCLE — tick logique (temps réel, pas de dérive) + rendu 30 fps
    ========================================================================= */
 
 // Tick logique : basé sur le temps réel écoulé depuis le dernier passage.
@@ -1388,7 +1609,7 @@ function rafraichirAccessibilite(){
 }
 
 /* =========================================================================
-   10. SAUVEGARDE — localStorage, export/import, gains hors ligne
+   11. SAUVEGARDE — localStorage, export/import, gains hors ligne
    ========================================================================= */
 
 function sauvegarder(){
@@ -1406,6 +1627,7 @@ function charger(){
     // Fusion prudente avec un état neuf (compatibilité future)
     etat = Object.assign(etatNeuf(), donnees);
     etat.roulette = Object.assign(etatNeuf().roulette, donnees.roulette || {});
+    etat.blackjack = Object.assign(etatNeuf().blackjack, donnees.blackjack || {});
     if(!Array.isArray(etat.effets)) etat.effets = [];
     return true;
   }catch(e){ return false; }
@@ -1485,6 +1707,7 @@ function importerSauvegarde(){
       if(typeof donnees.banque !== "number") throw new Error("format");
       etat = Object.assign(etatNeuf(), donnees);
       etat.roulette = Object.assign(etatNeuf().roulette, donnees.roulette || {});
+      etat.blackjack = Object.assign(etatNeuf().blackjack, donnees.blackjack || {});
       etat.dernierTick = maintenant();
       fermerModale();
       notifier("Import réussi", "Votre partie a été restaurée.", "succes-notif");
@@ -1519,7 +1742,7 @@ function reinitialiser(){
 }
 
 /* =========================================================================
-   11. CLASSEMENT PARTAGÉ — pseudo, envoi/lecture des scores (Firebase REST)
+   12. CLASSEMENT PARTAGÉ — pseudo, envoi/lecture des scores (Firebase REST)
    ========================================================================= */
 
 // Échappe le HTML dangereux d'un texte avant de l'insérer via innerHTML.
@@ -1705,6 +1928,7 @@ function majTout(){
   rendreBoutique();
   rendreAmeliorations();
   rendreRoulette();
+  rendreJeuxTable();
   rendreSucces();
   rendreStats();
   rendrePastilleAmel();
@@ -1855,6 +2079,105 @@ function rendreRoulette(){
   $("#aff-gain-pot").textContent = formaterNombre(mise * cote);
 }
 
+// --- Sélecteur générique des jeux de table (sous le jeton) ---
+// Construit les boutons une seule fois à partir de JEUX_TABLE, puis à chaque
+// rendu : met à jour l'onglet actif et affiche/masque le panneau du jeu ouvert.
+function rendreJeuxTable(){
+  const sel = $("#jeux-selecteur");
+  if(!sel.dataset.pret){
+    for(const j of JEUX_TABLE){
+      const b = creer("button", "jeu-btn");
+      b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", "false");
+      b.textContent = j.nom; b.dataset.jeu = j.id;
+      b.addEventListener("click", () => basculerJeuTable(j.id));
+      sel.appendChild(b);
+    }
+    sel.dataset.pret = "1";
+  }
+  $$("#jeux-selecteur .jeu-btn").forEach(b => b.setAttribute("aria-selected", b.dataset.jeu === ui.jeuOuvert));
+
+  const panneau = $("#jeux-panneau");
+  panneau.hidden = !ui.jeuOuvert;
+  if(ui.jeuOuvert === "blackjack") rendreBlackjack();
+}
+
+// Ouvre le jeu `id` ; le refermer si déjà ouvert, ou basculer depuis un autre jeu
+// (un seul jeu de table ouvert à la fois — le prochain jeu ajouté suivra ce même mécanisme).
+function basculerJeuTable(id){
+  ui.jeuOuvert = (ui.jeuOuvert === id) ? null : id;
+  rendreJeuxTable();
+}
+
+// --- Blackjack : rendu du panneau (reconstruit entièrement à chaque action) ---
+function rendreBlackjack(){
+  const panneau = $("#jeux-panneau");
+  const b = ui.bj;
+
+  const carteHTML = (c, cachee) => cachee
+    ? `<div class="bj-carte cachee"></div>`
+    : `<div class="bj-carte${c.rouge ? " rouge" : ""}"><span>${c.rang}</span><span>${c.symbole}</span></div>`;
+
+  const secondeCarteCachee = b.enCours && !b.resolu;
+  const cartesCroupierHTML = b.mainCroupier.map((c, i) => carteHTML(c, secondeCarteCachee && i === 1)).join("");
+  const scoreCroupier = secondeCarteCachee ? "?" : bjScore(b.mainCroupier);
+
+  panneau.innerHTML = `
+    <div class="bj-titre">🃏 Blackjack</div>
+    <div class="bj-mise-actuelle">Mise : <b>${formaterNombre(bjMiseActuelle())}</b> jetons</div>
+    <div class="bj-mises" id="bj-mises">
+      <button data-part="0.10" aria-pressed="${b.partMise === 0.10}">10 %</button>
+      <button data-part="0.25" aria-pressed="${b.partMise === 0.25}">25 %</button>
+      <button data-part="0.50" aria-pressed="${b.partMise === 0.50}">50 %</button>
+      <button data-part="1" aria-pressed="${b.partMise === 1}">Tout</button>
+    </div>
+    <div class="bj-mains">
+      <div class="bj-main">
+        <div class="lib"><span>Croupier</span><span class="score">${b.mainCroupier.length ? scoreCroupier : ""}</span></div>
+        <div class="bj-cartes">${cartesCroupierHTML || '<span style="color:var(--ivoire-doux);font-size:13px;">En attente…</span>'}</div>
+      </div>
+      <div class="bj-main">
+        <div class="lib"><span>Vous</span><span class="score">${b.mainJoueur.length ? bjScore(b.mainJoueur) : ""}</span></div>
+        <div class="bj-cartes">${b.mainJoueur.map(c => carteHTML(c, false)).join("") || '<span style="color:var(--ivoire-doux);font-size:13px;">Misez pour être servi.</span>'}</div>
+      </div>
+    </div>
+    <div class="bj-message">${b.message || ""}</div>
+    <div class="bj-actions">
+      ${!b.enCours
+        ? `<button id="bj-distribuer">Distribuer</button>`
+        : `<button id="bj-tirer">Tirer</button>
+           <button id="bj-rester" class="secondaire">Rester</button>
+           ${b.mainJoueur.length === 2 ? `<button id="bj-doubler" class="secondaire">Doubler</button>` : ""}`
+      }
+    </div>
+    <div class="bj-stats">
+      <div>Victoires<br><b>${etat.blackjack.victoires}</b></div>
+      <div>Défaites<br><b>${etat.blackjack.defaites}</b></div>
+      <div>Égalités<br><b>${etat.blackjack.push}</b></div>
+      <div>Bilan net<br><b>${formaterNombre(etat.blackjack.gainsCumules - etat.blackjack.pertesCumulees)}</b></div>
+    </div>
+  `;
+
+  // Écouteurs (le panneau étant entièrement régénéré, on les rattache à chaque rendu)
+  $$("#bj-mises button").forEach(btn => {
+    btn.addEventListener("click", () => { ui.bj.partMise = parseFloat(btn.dataset.part); rendreBlackjack(); });
+  });
+  const btnDistribuer = $("#bj-distribuer");
+  if(btnDistribuer){
+    btnDistribuer.addEventListener("click", () => { bjCommencerManche(); tinter(); });
+    const mise = bjMiseActuelle();
+    btnDistribuer.disabled = mise < 1 || etat.banque < mise;
+  }
+  const btnTirer = $("#bj-tirer");
+  if(btnTirer) btnTirer.addEventListener("click", () => { bjTirer(); tinter(); });
+  const btnRester = $("#bj-rester");
+  if(btnRester) btnRester.addEventListener("click", bjRester);
+  const btnDoubler = $("#bj-doubler");
+  if(btnDoubler){
+    btnDoubler.addEventListener("click", () => { bjDoubler(); tinter(); });
+    btnDoubler.disabled = etat.banque < ui.bj.mise;
+  }
+}
+
 function rendreSucces(){
   const grille = $("#grille-succes");
   grille.innerHTML = "";
@@ -1872,6 +2195,7 @@ function rendreSucces(){
 function rendreStats(){
   const cont = $("#liste-stats");
   const r = etat.roulette;
+  const bj = etat.blackjack;
   const lignes = [
     ["Jetons en banque", formaterNombre(Math.floor(etat.banque))],
     ["Production / seconde", formaterNombre(productionParSeconde())],
@@ -1892,6 +2216,10 @@ function rendreStats(){
     ["Pertes cumulées (roulette)", formaterNombre(r.pertesCumulees)],
     ["Bilan net roulette", formaterNombre(r.gainsCumules - r.pertesCumulees)],
     ["Plus gros gain (une mise)", formaterNombre(r.plusGrosGain)],
+    ["— Blackjack —", ""],
+    ["Victoires / Défaites / Égalités", `${bj.victoires} / ${bj.defaites} / ${bj.push}`],
+    ["Bilan net blackjack", formaterNombre(bj.gainsCumules - bj.pertesCumulees)],
+    ["Plus gros gain (une main)", formaterNombre(bj.plusGrosGain)],
   ];
   cont.innerHTML = "";
   for(const [lib, val] of lignes){
